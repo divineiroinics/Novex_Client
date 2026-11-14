@@ -97,12 +97,12 @@ windows = { version = "=0.62.2", features = [
 winresource = "=0.1.31"
 
 [package.metadata.packager]
-product-name = "OneClient"
-identifier = "org.polyfrost.OneClient"
+product-name = "NOVEX Client"
+identifier = "org.xirx.NOVEXClient"
 category = "Game"
-publisher = "Polyfrost Inc."
-copyright = "© 2026 Polyfrost Inc."
-homepage = "https://polyfrost.org/projects/oneclient"
+publisher = "XIRX"
+copyright = "Original code © 2026 Polyfrost Inc. and contributors; NOVEX branding © 2026 XIRX."
+homepage = "https://github.com/divineiroinics/Novex_Client"
 long-description = "Next-generation open source Minecraft launcher"
 formats = ["nsis", "app", "dmg", "deb", "appimage"]
 binaries = [{ path = "oneclient_app", main = true }]
