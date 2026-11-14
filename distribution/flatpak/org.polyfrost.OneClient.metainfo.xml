@@ -3,7 +3,7 @@
   <id>org.xirx.NOVEXClient</id>
   <name>NOVEX Client</name>
   <summary>Next-generation open source Minecraft launcher</summary>
-  <developer id="org.polyfrost">
+  <developer id="org.xirx">
     <name>XIRX</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
