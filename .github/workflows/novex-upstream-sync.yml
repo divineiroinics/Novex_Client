@@ -1,4 +1,4 @@
-name: NOVEX upstream sync # canonical-logo-validation
+name: NOVEX upstream sync # canonical-logo-validation-and-updater-key
 on:
   workflow_dispatch:
   schedule:
@@ -56,6 +56,7 @@ jobs:
           test "$(grep -c '^pub const UPDATER_ENDPOINT:' packages/oneclient_app/src/constants.rs)" -eq 1
           test "$(grep -c '^pub const UPDATER_PUBKEY:' packages/oneclient_app/src/constants.rs)" -eq 1
           grep -q 'option_env!("NOVEX_UPDATER_PUBKEY")' packages/oneclient_app/src/constants.rs
+          ! grep -q 'UPDATER_PUBKEY: &str = "option_env!' packages/oneclient_app/src/constants.rs
           grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
           grep -q 'NOVEX Client v' packages/oneclient_common/src/constants.rs
           grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
