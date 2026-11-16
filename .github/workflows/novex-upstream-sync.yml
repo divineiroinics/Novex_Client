@@ -9,7 +9,6 @@ on:
       - .github/workflows/novex-upstream-sync.yml
 permissions:
   contents: write
-  pull-requests: write
 concurrency:
   group: novex-upstream-sync
   cancel-in-progress: false
@@ -46,12 +45,12 @@ jobs:
           grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
           cargo metadata --no-deps --format-version 1 > /tmp/novex-cargo-metadata.json
-      - uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: novex/rebrand
-          branch: novex/upstream-sync
-          delete-branch: true
-          title: "Sync latest OneLauncher updates into NOVEX"
-          body: "Automated upstream sync. Non-conflicting upstream changes are merged, then NOVEX display branding and icons are reapplied."
-          commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
+      - name: Commit branding overlay and push the verified upstream sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add packages/oneclient_app/assets/logo.svg packages/oneclient_app/assets/icons/icon-logo.svg packages/oneclient_app/assets/icons/pixel/icon-logo.svg packages/oneclient_app/icons packages/oneclient_app/lang/en_us.json packages/oneclient_app/Cargo.toml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: reapply NOVEX branding after upstream sync"
+          fi
+          git push origin HEAD:refs/heads/novex/rebrand
