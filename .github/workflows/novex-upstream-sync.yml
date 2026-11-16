@@ -5,10 +5,10 @@ on:
     - cron: "23 3 * * *"
   push:
     branches: [novex/rebrand]
-    paths:
-      - .github/workflows/novex-upstream-sync.yml
+    paths: [.github/workflows/novex-upstream-sync.yml]
 permissions:
   contents: write
+  pull-requests: write
 concurrency:
   group: novex-upstream-sync
   cancel-in-progress: false
@@ -20,37 +20,41 @@ jobs:
         with:
           ref: novex/rebrand
           fetch-depth: 0
+      - name: Configure sync commit identity
+        run: |
+          git config user.name "NOVEX Upstream Sync"
+          git config user.email "41898282+novex-sync@users.noreply.github.com"
       - name: Merge latest OneLauncher upstream
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "NOVEX Sync Bot"
-          git config user.email "novex-sync-bot@users.noreply.github.com"
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
           if ! git merge-base --is-ancestor upstream/main HEAD; then
-            git merge --no-edit --no-ff -X ours upstream/main
+            if ! git merge --no-edit --no-ff upstream/main; then
+              git merge --abort || true
+              echo "::error::Upstream conflicts need a manual resolution."
+              exit 1
+            fi
           fi
       - name: Reapply canonical NOVEX branding
         run: |
           python -m pip install --disable-pip-version-check Pillow
           python scripts/apply-novex-branding.py
-      - name: Validate branding and workspace metadata
+      - name: Validate branding and formatting
         run: |
-          set -euo pipefail
           test -s branding/novex-mark.webp
           test -s packages/oneclient_app/icons/icon.ico
           test -s packages/oneclient_app/icons/icon.icns
-          grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
-          grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
-          cargo metadata --no-deps --format-version 1 > /tmp/novex-cargo-metadata.json
-      - name: Commit branding overlay and push the verified upstream sync
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add packages/oneclient_app/assets/logo.svg packages/oneclient_app/assets/icons/icon-logo.svg packages/oneclient_app/assets/icons/pixel/icon-logo.svg packages/oneclient_app/icons packages/oneclient_app/lang/en_us.json packages/oneclient_app/Cargo.toml
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: reapply NOVEX branding after upstream sync"
-          fi
-          git push origin HEAD:refs/heads/novex/rebrand
+          grep -q "XIRX" packages/oneclient_app/Cargo.toml
+          cargo fmt --all -- --check
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: novex/rebrand
+          branch: novex/upstream-sync
+          delete-branch: true
+          title: "Sync latest OneLauncher updates into NOVEX"
+          body: "Automated upstream sync. NOVEX branding is reapplied after merging upstream; review checks before merging."
+          commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
