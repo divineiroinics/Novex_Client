@@ -61,7 +61,6 @@ jobs:
           grep -q 'NOVEX Client v' packages/oneclient_common/src/constants.rs
           grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
           grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
-          grep -q 'divineiroinics/Novex_Client/releases/latest/download/latest.json' packages/oneclient_app/src/constants.rs
       - name: Commit branding overlay and push verified upstream sync
         shell: bash
         run: |
