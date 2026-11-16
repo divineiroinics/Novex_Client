@@ -84,11 +84,10 @@ constants = APP / "src" / "constants.rs"
 if constants.exists():
     content = constants.read_text(encoding="utf-8")
     def set_const(source: str, name: str, value: str) -> str:
-        pattern = rf'(?ms)^pub const {name}: &str =\s*".*?";'
+        pattern = rf'(?ms)^pub const {name}: &str =\s*".*?";\s*'
+        source = re.sub(pattern, "", source)
         replacement = f'pub const {name}: &str = "{value}";'
-        if re.search(pattern, source):
-            return re.sub(pattern, replacement, source, count=1)
-        return source.rstrip() + "\n" + replacement + "\n"
+        return source.rstrip() + "\n\n" + replacement + "\n"
     content = set_const(
         content, "UPDATER_ENDPOINT",
         "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json",
