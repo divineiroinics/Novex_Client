@@ -60,6 +60,12 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      - name: Apply NOVEX branding to every UI string and app icon
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python scripts/apply-novex-branding.py
+
       - name: (macOS) Pin deployment target
         if: matrix.macos_deployment_target != ''
         shell: bash
