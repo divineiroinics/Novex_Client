@@ -102,7 +102,7 @@ if constants.exists():
     content = set_const(content, "UPDATER_PUBKEY", "")
     content = content.replace(
         'pub const UPDATER_PUBKEY: &str = "";',
-        'pub const UPDATER_PUBKEY: &str = option_env!("NOVEX_UPDATER_PUBKEY").unwrap_or("");',
+        'pub const UPDATER_PUBKEY: &str = match option_env!("NOVEX_UPDATER_PUBKEY") { Some(value) => value, None => "" };',
     )
     constants.write_text(content, encoding="utf-8")
 
