@@ -190,7 +190,9 @@ fn screening_note(picks: &Picks) -> String {
             ([], true) => {
                 t("oneclient.clusters.instance.copy.note.import_review.none_modpack").to_string()
             }
-            ([], false) => t("oneclient.clusters.instance.copy.note.import_review.none").to_string(),
+            ([], false) => {
+                t("oneclient.clusters.instance.copy.note.import_review.none").to_string()
+            }
             (parts, true) => tf(
                 "oneclient.clusters.instance.copy.note.import_review.parts_modpack",
                 &[&parts.join(", ")],
@@ -288,12 +290,10 @@ fn review_parts(picks: &Picks) -> Vec<String> {
 
 pub fn is_ready(picks: &Picks) -> bool {
     match picks.step {
-        Step::Bundles if picks.improving => {
-            picks
-                .improve_targets
-                .as_ref()
-                .is_some_and(|targets| targets.is_empty() || picks.bundles.loaded)
-        }
+        Step::Bundles if picks.improving => picks
+            .improve_targets
+            .as_ref()
+            .is_some_and(|targets| targets.is_empty() || picks.bundles.loaded),
         Step::Type | Step::Folder | Step::Bundles | Step::Modpack => true,
         Step::Loader => picks.loader.chosen.is_some_and(|loader| picks.fits(loader)),
         Step::Version => {

@@ -7,8 +7,9 @@ use oneclient_net::RequestError;
 
 use crate::api::send_to;
 use crate::models::{
-    BlockedPlayer, CreateGroupRequest, CursorPage, EditMessageRequest, Friend, FriendRequest, GroupMessage,
-    GroupSummary, IncomingSessionInvite, MAX_CURSOR_PAGE_SIZE, MAX_PAGE_SIZE, MAX_RESOLVE_BATCH, PlayerStatus, RenameGroupRequest, ResolveRequest, ResolveResponse,
+    BlockedPlayer, CreateGroupRequest, CursorPage, EditMessageRequest, Friend, FriendRequest,
+    GroupMessage, GroupSummary, IncomingSessionInvite, MAX_CURSOR_PAGE_SIZE, MAX_PAGE_SIZE,
+    MAX_RESOLVE_BATCH, PlayerStatus, RenameGroupRequest, ResolveRequest, ResolveResponse,
     ResolvedPlayer, SendMessageRequest, SpecialChatStatus, StatusBody,
 };
 use crate::{PlusClient, PlusError, base_url, session};
@@ -25,8 +26,12 @@ impl PlusClient {
     }
 
     pub async fn open_direct_message(&self, player: Uuid) -> Result<GroupSummary, PlusError> {
-        self.json(Method::POST, self.url(&format!("/groups/dm/{player}"))?, None)
-            .await
+        self.json(
+            Method::POST,
+            self.url(&format!("/groups/dm/{player}"))?,
+            None,
+        )
+        .await
     }
 
     pub async fn create_group(
@@ -353,6 +358,5 @@ impl PlusClient {
 }
 
 fn serialize<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, PlusError> {
-    serde_json::to_value(value)
-        .map_err(|err| PlusError::Request(RequestError::SerializeError(err)))
+    serde_json::to_value(value).map_err(|err| PlusError::Request(RequestError::SerializeError(err)))
 }

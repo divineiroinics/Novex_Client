@@ -82,10 +82,7 @@ pub fn body(wizard: Wizard, picks: &Picks) -> Element {
         .key(key)
         .width(Size::fill())
         .height(
-            if matches!(
-                picks.step,
-                Step::Folder | Step::Version | Step::Import
-            ) {
+            if matches!(picks.step, Step::Folder | Step::Version | Step::Import) {
                 Size::fill()
             } else {
                 Size::auto()

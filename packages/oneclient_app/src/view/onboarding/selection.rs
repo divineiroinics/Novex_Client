@@ -227,7 +227,11 @@ mod tests {
         let skyblock = "OneClient 1.21.11 Fabric [SkyBlock]";
         assert_eq!(
             overrides,
-            vec![(skyblock.to_string(), "sb-a".to_string(), OverrideType::Removed)]
+            vec![(
+                skyblock.to_string(),
+                "sb-a".to_string(),
+                OverrideType::Removed
+            )]
         );
         assert_eq!(choices, vec![(skyblock.to_string(), false)]);
     }

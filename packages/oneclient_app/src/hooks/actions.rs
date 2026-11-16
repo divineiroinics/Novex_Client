@@ -45,16 +45,16 @@ use tokio::sync::mpsc;
 use crate::components::IconType;
 use crate::hooks::{GraphicsBackendQuery, PackageUpdatesQuery};
 use crate::i18n::{t, tf};
+use crate::install::IncompatibleMode;
 use crate::launcher::off_ui;
 use crate::notifications::{
     BundleChoices, ClusterUpdateSummary, NotificationAction, NotificationSpec, OptionalModRef,
     OptionalModsGroup, OptionalModsOutcome, PackageUpdateGroup, PendingPrompt,
 };
 use crate::state::{
-    AppChannel, AppState, AsyncStatus, FlaggedInstallPrompt, IncompatibleInstallPrompt, MissingModInstall,
-    RelocationState,
+    AppChannel, AppState, AsyncStatus, FlaggedInstallPrompt, IncompatibleInstallPrompt,
+    MissingModInstall, RelocationState,
 };
-use crate::install::IncompatibleMode;
 use crate::{invalidate_java_queries, launcher};
 
 /// Over-disabling is the cheaper mistake a dead button beats a second game

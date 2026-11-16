@@ -218,12 +218,8 @@ const ONECLIENT_STEPS: [Step; 5] = [
 const SCRATCH_STEPS: [Step; 4] = [Step::Type, Step::Version, Step::Loader, Step::Customize];
 const MODPACK_STEPS: [Step; 2] = [Step::Type, Step::Modpack];
 const MODPACK_FILE_STEPS: [Step; 3] = [Step::Type, Step::Modpack, Step::ImportMode];
-const MODPACK_IMPROVE_STEPS: [Step; 4] = [
-    Step::Type,
-    Step::Modpack,
-    Step::ImportMode,
-    Step::Bundles,
-];
+const MODPACK_IMPROVE_STEPS: [Step; 4] =
+    [Step::Type, Step::Modpack, Step::ImportMode, Step::Bundles];
 const IMPORT_FILE_STEPS: [Step; 2] = [Step::Type, Step::ImportSource];
 const IMPORT_STEPS: [Step; 4] = [
     Step::Type,
@@ -388,8 +384,7 @@ mod tests {
             Some(GameLoader::Ornithe)
         );
         assert_eq!(
-            LoaderChoice::Forge
-                .resolve_exact(&[GameLoader::Forge], Some(GameLoader::Ornithe)),
+            LoaderChoice::Forge.resolve_exact(&[GameLoader::Forge], Some(GameLoader::Ornithe)),
             Some(GameLoader::Forge)
         );
     }

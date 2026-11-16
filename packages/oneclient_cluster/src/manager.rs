@@ -1113,7 +1113,9 @@ mod tests {
             polyio::create_dir_all(path.parent().unwrap())
                 .await
                 .unwrap();
-            polyio::write(&path, body.as_bytes().to_vec()).await.unwrap();
+            polyio::write(&path, body.as_bytes().to_vec())
+                .await
+                .unwrap();
             set_read_only(&path, true);
         }
 

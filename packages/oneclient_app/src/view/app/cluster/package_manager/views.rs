@@ -1154,14 +1154,17 @@ impl Component for ContentBox {
                     on_delete,
                     on_bundled,
                     (move |()| selection.toggle(key.clone())).into(),
-                    item.hash.clone().filter(|_| item.update_checkable()).map(|hash| {
-                        let dispatch = dispatch.clone();
-                        let package = (hash, item.name.clone());
-                        (move |()| {
-                            dispatch.check_package_updates(cluster_id, vec![package.clone()])
-                        })
-                        .into()
-                    }),
+                    item.hash
+                        .clone()
+                        .filter(|_| item.update_checkable())
+                        .map(|hash| {
+                            let dispatch = dispatch.clone();
+                            let package = (hash, item.name.clone());
+                            (move |()| {
+                                dispatch.check_package_updates(cluster_id, vec![package.clone()])
+                            })
+                            .into()
+                        }),
                 )
             };
             menu_for

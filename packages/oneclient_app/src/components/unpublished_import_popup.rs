@@ -113,8 +113,15 @@ fn dialog(
             ))
             .into_element()
     });
-    let unpublished: usize = import.instances.iter().map(|instance| instance.mods.len()).sum();
-    let listed = import.instances.iter().all(|instance| instance.unconfirmed == 0);
+    let unpublished: usize = import
+        .instances
+        .iter()
+        .map(|instance| instance.mods.len())
+        .sum();
+    let listed = import
+        .instances
+        .iter()
+        .all(|instance| instance.unconfirmed == 0);
     let without = (listed && unpublished > 0).then(|| {
         Button::new()
             .secondary()

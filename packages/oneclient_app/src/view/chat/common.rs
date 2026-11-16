@@ -211,7 +211,11 @@ impl Component for HeaderButton {
             .height(Size::px(30.))
             .center()
             .corner_radius(rounded(ROW_RADIUS_PX))
-            .background(if hot { colors::ghost_overlay() } else { Color::TRANSPARENT })
+            .background(if hot {
+                colors::ghost_overlay()
+            } else {
+                Color::TRANSPARENT
+            })
             .cursor(CursorIcon::Pointer)
             .on_pointer_over(move |_| hovered.set(true))
             .on_pointer_out(move |_| hovered.set(false))
