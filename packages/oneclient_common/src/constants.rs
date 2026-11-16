@@ -30,7 +30,7 @@ pub const SENTRY_DSN: &str = match option_env!("ONECLIENT_SENTRY_DSN") {
 };
 
 pub const LAUNCHER_LABEL: &str = concat!(
-    "OneClient v",
+    "NOVEX Client v",
     env!("CARGO_PKG_VERSION"),
     cfg_select! {
         debug_assertions => " (debug)",
