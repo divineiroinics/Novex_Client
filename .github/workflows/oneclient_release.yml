@@ -1,4 +1,4 @@
-name: OneClient Release Build
+name: NOVEX Client Release Build
 
 
 on:
@@ -67,15 +67,15 @@ jobs:
             echo "::error::Could not read version from [workspace.package] in Cargo.toml"
             exit 1
           fi
-          TAG="oneclient-$VERSION"
-          echo "Releasing OneClient $VERSION"
+          TAG="novex-$VERSION"
+          echo "Releasing NOVEX Client $VERSION"
 
           # Abort rather than clobber: a published release (or an existing tag,
           # which only appears once a release is published) means this version
           # already shipped. A *draft* is a previous failed/partial run of this
           # same workflow, so reuse it.
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "::error::Tag $TAG already exists on origin - OneClient $VERSION has already been released. Add a change file with \`knope document-change\` first."
+            echo "::error::Tag $TAG already exists on origin - NOVEX Client $VERSION has already been released. Add a change file with \`knope document-change\` first."
             exit 1
           fi
 
@@ -85,7 +85,7 @@ jobs:
             RELEASE_EXISTS=1
           fi
           if [ "$RELEASE_EXISTS" = "1" ] && [ "$IS_DRAFT" != "true" ]; then
-            echo "::error::Release $TAG already exists and is published - refusing to overwrite OneClient $VERSION. Add a change file with \`knope document-change\` first."
+            echo "::error::Release $TAG already exists and is published - refusing to overwrite NOVEX Client $VERSION. Add a change file with \`knope document-change\` first."
             exit 1
           fi
 
@@ -115,7 +115,7 @@ jobs:
             gh release create "$TAG" \
               --draft \
               --target "$SHA" \
-              --title "OneClient $VERSION" \
+              --title "NOVEX Client $VERSION" \
               --notes-file notes.md
           fi
 
@@ -512,7 +512,7 @@ jobs:
           # The updater bundle isn't always arch-tagged by cargo-packager, so the two
           # macOS legs would collide on the release. Rename the updater artifact + its .sig
           # to an arch-unique name before upload, and point the manifest at that name.
-          unique="OneClient_${VERSION}_${OS_KEY}_${ARCH}.${ext}"
+          unique="NOVEX_Client_${VERSION}_${OS_KEY}_${ARCH}.${ext}"
           cp "$updater_file" "$OUT_DIR/$unique"
           cp "$updater_file.sig" "$OUT_DIR/$unique.sig"
 
@@ -522,7 +522,7 @@ jobs:
           deb_unique=""
           deb_matches=("$OUT_DIR"/*.deb)
           if [ -e "${deb_matches[0]:-}" ]; then
-            deb_unique="OneClient_${VERSION}_${OS_KEY}_${ARCH}.deb"
+            deb_unique="NOVEX_Client_${VERSION}_${OS_KEY}_${ARCH}.deb"
             cp "${deb_matches[0]}" "$OUT_DIR/$deb_unique"
           fi
 
@@ -531,7 +531,7 @@ jobs:
           rpm_unique=""
           rpm_matches=("$OUT_DIR"/*.rpm)
           if [ -e "${rpm_matches[0]:-}" ]; then
-            rpm_unique="OneClient_${VERSION}_${OS_KEY}_${ARCH}.rpm"
+            rpm_unique="NOVEX_Client_${VERSION}_${OS_KEY}_${ARCH}.rpm"
             cp "${rpm_matches[0]}" "$OUT_DIR/$rpm_unique"
           fi
 

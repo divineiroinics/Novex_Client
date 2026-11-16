@@ -29,7 +29,12 @@ jobs:
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
           if ! git merge-base --is-ancestor upstream/main HEAD; then
-            git merge --no-edit --no-ff -X ours upstream/main
+            # Never silently retain stale NOVEX-side code on an upstream conflict.
+            if ! git merge --no-edit --no-ff upstream/main; then
+              git merge --abort || true
+              echo "::error::Upstream changes conflict with NOVEX customizations. Resolve the conflict on novex/rebrand, then rerun this workflow."
+              exit 1
+            fi
           fi
       - name: Reapply canonical NOVEX branding
         run: |
@@ -65,7 +70,11 @@ jobs:
           for attempt in 1 2 3; do
             git fetch origin novex/rebrand
             if ! git merge-base --is-ancestor origin/novex/rebrand HEAD; then
-              git merge --no-edit -X theirs origin/novex/rebrand
+              if ! git merge --no-edit origin/novex/rebrand; then
+                git merge --abort || true
+                echo "::error::The NOVEX branch moved with conflicting changes during sync. Retry after reviewing the branch."
+                exit 1
+              fi
               python scripts/apply-novex-branding.py
               cargo fmt --all
               grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
