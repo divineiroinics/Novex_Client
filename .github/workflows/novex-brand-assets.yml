@@ -1,9 +1,10 @@
 name: NOVEX branded assets
 on:
   push:
-    branches: [novex/rebrand]
+    branches:
+      - novex/rebrand
     paths:
-      - branding/novex-mark.webp
+      - branding/novex-mark.png
       - scripts/apply-novex-branding.py
       - .github/workflows/novex-brand-assets.yml
   workflow_dispatch:
@@ -34,6 +35,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add packages/oneclient_app/assets/logo.svg packages/oneclient_app/assets/icons/icon-logo.svg packages/oneclient_app/assets/icons/pixel/icon-logo.svg packages/oneclient_app/icons
-          if git diff --cached --quiet; then echo "Brand assets already match."; exit 0; fi
+          if git diff --cached --quiet; then
+            echo "Brand assets already match the canonical emblem."
+            exit 0
+          fi
           git commit -m "chore: regenerate NOVEX branded app icons"
           git push origin HEAD:novex/rebrand

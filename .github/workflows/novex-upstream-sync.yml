@@ -3,6 +3,10 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "23 3 * * *"
+  push:
+    branches: [novex/rebrand]
+    paths:
+      - .github/workflows/novex-upstream-sync.yml
 permissions:
   contents: write
   pull-requests: write
