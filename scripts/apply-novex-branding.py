@@ -14,7 +14,7 @@ def render(size: int) -> Image.Image:
     mark = raw.copy()
     mark.thumbnail((size, size), Image.Resampling.LANCZOS)
     canvas.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
-    return canvas.convert("RGB)
+    return canvas.convert("RGB")
 
 icons = APP / "icons"
 for size, name in [
