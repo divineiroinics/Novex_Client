@@ -53,6 +53,19 @@ for path in [
 ]:
     path.write_text(svg, encoding="utf-8")
 
+# Keep Windows executable version-resource strings branded after upstream sync.
+build_script = APP / "build.rs"
+if build_script.exists():
+    content = build_script.read_text(encoding="utf-8")
+    for old, new in [
+        ('res.set("CompanyName", "Polyfrost Inc.");', 'res.set("CompanyName", "XIRX");'),
+        ('res.set("ProductName", "OneClient");', 'res.set("ProductName", "NOVEX Client");'),
+        ('res.set("FileDescription", "OneClient");', 'res.set("FileDescription", "NOVEX Client");'),
+        ('res.set("LegalCopyright", "© 2026 Polyfrost Inc.");', 'res.set("LegalCopyright", "© 2026 XIRX. Original code © 2026 Polyfrost Inc. and contributors.");'),
+    ]:
+        content = content.replace(old, new)
+    build_script.write_text(content, encoding="utf-8")
+
 # Change user-facing message values without changing internal translation keys.
 lang_path = APP / "lang" / "en_us.json"
 if lang_path.exists():
