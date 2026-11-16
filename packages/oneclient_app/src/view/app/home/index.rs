@@ -39,7 +39,7 @@ impl Component for Home {
                     .child(
                         label()
                             .text("Launch your instances, manage your mods, and get straight into the game.")
-                            .font_size(text_size(13.))
+                            .font_size(theme::text_size(13.))
                             .color(theme::colors::on_art_secondary()),
                     ),
             )

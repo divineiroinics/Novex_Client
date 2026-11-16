@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/oneclient_app/assets/logo.svg packages/oneclient_app/assets/icons/icon-logo.svg packages/oneclient_app/assets/icons/pixel/icon-logo.svg packages/oneclient_app/icons
+          git add packages
           if git diff --cached --quiet; then
             echo "Brand assets already match the canonical emblem."
             exit 0
