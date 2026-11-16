@@ -25,14 +25,14 @@ impl Component for Home {
                     .child(
                         label()
                             .text("NOVEX CLIENT")
-                            .font_size(text_size(13.))
+                            .font_size(theme::text_size(13.))
                             .font_weight(FontWeight::BOLD)
                             .color(theme::colors::brand()),
                     )
                     .child(
                         label()
                             .text("Your Minecraft. Your way.")
-                            .font_size(text_size(25.))
+                            .font_size(theme::text_size(25.))
                             .font_weight(FontWeight::BOLD)
                             .color(theme::colors::on_art()),
                     )

@@ -55,7 +55,7 @@ for path in [
     APP / "assets" / "logo.svg",
     APP / "assets" / "icons" / "icon-logo.svg",
     APP / "assets" / "icons" / "pixel" / "icon-logo.svg",
-    APP / "icons" / "OneClient.icon" / "Assets" / "oneclient-mark.svg",
+    APP / "icons" / "OneClient.icon" / "Assets" / "novex-mark.svg",
 ]:
     path.write_text(svg, encoding="utf-8")
 
