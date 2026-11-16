@@ -99,7 +99,11 @@ if constants.exists():
         content, "UPDATER_ENDPOINT",
         "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json",
     )
-    content = set_const(content, "UPDATER_PUBKEY", "option_env!(\"NOVEX_UPDATER_PUBKEY\").unwrap_or(\"\")")
+    content = set_const(content, "UPDATER_PUBKEY", "")
+    content = content.replace(
+        'pub const UPDATER_PUBKEY: &str = "";',
+        'pub const UPDATER_PUBKEY: &str = option_env!("NOVEX_UPDATER_PUBKEY").unwrap_or("");',
+    )
     constants.write_text(content, encoding="utf-8")
 
 print("NOVEX branding overlay applied; auto-updates remain safely disabled until a NOVEX signing key is configured.")
