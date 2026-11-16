@@ -49,6 +49,9 @@ jobs:
           grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
           grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
           grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
+          grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
+          grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
+          grep -q 'divineiroinics/Novex_Client/releases/latest/download/latest.json' packages/oneclient_app/src/constants.rs
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
           cargo metadata --no-deps --format-version 1 > /tmp/novex-cargo-metadata.json
       - name: Commit branding overlay and push verified upstream sync
