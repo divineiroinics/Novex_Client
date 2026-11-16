@@ -30,7 +30,8 @@ jobs:
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
           if ! git merge-base --is-ancestor upstream/main HEAD; then
-            git merge --no-edit --no-ff upstream/main || { git merge --abort; echo "::error::Upstream conflicts need a manual resolution."; exit 1; }
+            # Keep NOVEX on overlapping edits; the overlay below reapplies branded values and assets.
+            git merge --no-edit --no-ff -X ours upstream/main
           fi
       - name: Reapply canonical NOVEX branding
         run: |
@@ -38,11 +39,13 @@ jobs:
           python scripts/apply-novex-branding.py
       - name: Validate branding and formatting
         run: |
+          set -euo pipefail
           test -s branding/novex-mark.webp
           test -s packages/oneclient_app/icons/icon.ico
           test -s packages/oneclient_app/icons/icon.icns
+          grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
+          grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
-          grep -q "XIRX" packages/oneclient_app/Cargo.toml
           cargo fmt --all -- --check
       - uses: peter-evans/create-pull-request@v7
         with:
@@ -51,5 +54,5 @@ jobs:
           branch: novex/upstream-sync
           delete-branch: true
           title: "Sync latest OneLauncher updates into NOVEX"
-          body: "Automated upstream sync. NOVEX branding is reapplied after merging upstream; review checks before merging."
+          body: "Automated upstream sync. Non-conflicting upstream changes are merged, then NOVEX display branding and icons are reapplied."
           commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
