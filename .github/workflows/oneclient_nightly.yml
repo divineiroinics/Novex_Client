@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: oneclient-nightly-${{ github.ref }}
-  cancel-in-progress: false
+  group: novex-nightly-${{ github.ref }}
+  cancel-in-progress: true
 
 # Nightlies are unsigned test builds, so they do not need the release profile's
 # whole-program optimization - and that optimization is exactly what makes them
