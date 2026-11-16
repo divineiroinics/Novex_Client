@@ -4,7 +4,7 @@ on:
     branches:
       - novex/rebrand
     paths:
-      - branding/novex-mark.png
+      - branding/novex-mark.webp
       - scripts/apply-novex-branding.py
       - .github/workflows/novex-brand-assets.yml
   workflow_dispatch:
