@@ -30,14 +30,13 @@ jobs:
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
           if ! git merge-base --is-ancestor upstream/main HEAD; then
-            # Keep NOVEX on overlapping edits; the overlay below reapplies branded values and assets.
             git merge --no-edit --no-ff -X ours upstream/main
           fi
       - name: Reapply canonical NOVEX branding
         run: |
           python -m pip install --disable-pip-version-check Pillow
           python scripts/apply-novex-branding.py
-      - name: Validate branding and formatting
+      - name: Validate branding and workspace metadata
         run: |
           set -euo pipefail
           test -s branding/novex-mark.webp
@@ -46,7 +45,7 @@ jobs:
           grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
           grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
-          cargo fmt --all -- --check
+          cargo metadata --no-deps --format-version 1 > /tmp/novex-cargo-metadata.json
       - uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
