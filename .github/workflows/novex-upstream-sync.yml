@@ -1,4 +1,4 @@
-name: NOVEX upstream sync
+name: NOVEX upstream sync # canonical-logo-validation
 on:
   workflow_dispatch:
   schedule:
