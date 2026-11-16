@@ -46,6 +46,7 @@ jobs:
           test -s packages/oneclient_app/icons/OneClient.icon/Assets/oneclient-mark.svg
           grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
           grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
+          grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
           cargo metadata --no-deps --format-version 1 > /tmp/novex-cargo-metadata.json
       - name: Commit branding overlay and push verified upstream sync
