@@ -58,8 +58,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: reapply NOVEX branding after upstream sync"
-          fi
-          git push origin HEAD:refs/heads/novex/rebrand
+          for attempt in 1 2 3; do
+            git fetch origin novex/rebrand
+            if ! git merge-base --is-ancestor origin/novex/rebrand HEAD; then
+              git merge --no-edit -X theirs origin/novex/rebrand
+              python scripts/apply-novex-branding.py
+              cargo fmt --all
+              grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
+              grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
+              grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
+              grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
+              grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
+            fi
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: reapply NOVEX branding after upstream sync"
+            fi
+            if git push origin HEAD:refs/heads/novex/rebrand; then
+              exit 0
+            fi
+            echo "Branch moved during push attempt $attempt; retrying against the latest branch."
+          done
+          echo "::error::Could not push the upstream sync after three retries."
+          exit 1
