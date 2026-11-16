@@ -40,7 +40,7 @@ jobs:
       - name: Validate branding and workspace metadata
         run: |
           set -euo pipefail
-          test -s branding/novex-mark.webp
+          test -s branding/novex-mark.png
           test -s packages/oneclient_app/icons/icon.ico
           test -s packages/oneclient_app/icons/icon.icns
           test -s packages/oneclient_app/icons/OneClient.icon/Assets/oneclient-mark.svg
