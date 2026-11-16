@@ -55,7 +55,7 @@ jobs:
           grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
           test "$(grep -c '^pub const UPDATER_ENDPOINT:' packages/oneclient_app/src/constants.rs)" -eq 1
           test "$(grep -c '^pub const UPDATER_PUBKEY:' packages/oneclient_app/src/constants.rs)" -eq 1
-          grep -q 'UPDATER_PUBKEY: &str = ""' packages/oneclient_app/src/constants.rs
+          grep -q 'option_env!("NOVEX_UPDATER_PUBKEY")' packages/oneclient_app/src/constants.rs
           grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
           grep -q 'NOVEX Client v' packages/oneclient_common/src/constants.rs
           grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs

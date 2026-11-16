@@ -229,8 +229,20 @@ jobs:
           print(f"signing-identity set to: {ident}")
           PY
 
+      - name: Validate NOVEX updater public key
+        shell: bash
+        env:
+          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
+        run: |
+          if [ -z "${NOVEX_UPDATER_PUBKEY:-}" ]; then
+            echo "::error::Set repository variable NOVEX_UPDATER_PUBKEY to the public key paired with CARGO_PACKAGER_SIGN_PRIVATE_KEY."
+            exit 1
+          fi
+
       - name: Build release binary
         shell: bash
+        env:
+          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
         run: |
           if [ -n "${{ matrix.target }}" ]; then
             cargo build --release --bin oneclient_app --target ${{ matrix.target }}
