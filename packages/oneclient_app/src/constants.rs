@@ -9,8 +9,4 @@ pub const LATEST_RELEASE_URL: &str =
     "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json";
 pub const RELEASES_URL: &str = "https://github.com/divineiroinics/Novex_Client/releases/latest";
 
-// The NOVEX feed is ready, but the matching minisign public key must be added
-// when the NOVEX release pipeline has its own private signing key.
-pub const UPDATER_ENDPOINT: &str =
-    "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json";
-pub const UPDATER_PUBKEY: &str = "";
+// NOVEX auto-updates stay disabled until a matching release-signing key is configured.
