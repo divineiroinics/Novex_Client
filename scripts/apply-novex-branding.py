@@ -16,10 +16,17 @@ raw = Image.open(SOURCE).convert("RGBA")
 if raw.width < 128 or raw.height < 128:
     raise SystemExit("Canonical NOVEX logo source is unexpectedly small")
 
+# Crop transparent padding from the supplied emblem before scaling. This makes
+# the mark visibly fill Windows taskbar/tray icon slots instead of appearing tiny.
+alpha_bounds = raw.getchannel("A").getbbox()
+if alpha_bounds:
+    raw = raw.crop(alpha_bounds)
+
 def render(size: int) -> Image.Image:
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     mark = raw.copy()
-    mark.thumbnail((size, size), Image.Resampling.LANCZOS)
+    edge = max(1, round(size * 0.92))
+    mark.thumbnail((edge, edge), Image.Resampling.LANCZOS)
     canvas.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
     return canvas
 
@@ -106,4 +113,22 @@ if constants.exists():
     )
     constants.write_text(content, encoding="utf-8")
 
-print("NOVEX branding overlay applied; auto-updates remain safely disabled until a NOVEX signing key is configured.")
+# Rebrand literal UI/runtime strings throughout source without renaming internal
+# Rust crate/module/type identifiers that are part of upstream architecture.
+string_literal = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
+for source_root in [ROOT / "packages"]:
+    for source_path in source_root.rglob("*"):
+        if not source_path.is_file() or source_path.suffix not in {".rs", ".toml", ".json", ".plist", ".xml", ".yml", ".yaml"}:
+            continue
+        try:
+            source = source_path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        updated = string_literal.sub(
+            lambda match: '"' + match.group(1).replace("OneClient", "NOVEX Client") + '"',
+            source,
+        )
+        if updated != source:
+            source_path.write_text(updated, encoding="utf-8")
+
+print("NOVEX branding overlay applied; app-visible OneClient strings and generated icons refreshed.")
