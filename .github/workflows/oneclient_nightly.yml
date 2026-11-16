@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: oneclient-nightly-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Nightlies are unsigned test builds, so they do not need the release profile's
 # whole-program optimization - and that optimization is exactly what makes them
