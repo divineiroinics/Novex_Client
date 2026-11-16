@@ -1,9 +1,9 @@
-name: OneClient Nightly (Unsigned)
+name: NOVEX Nightly (Unsigned)
 
 
 on:
   push:
-    branches: [main]
+    branches: [main, novex/rebrand]
   workflow_dispatch:
 
 concurrency:

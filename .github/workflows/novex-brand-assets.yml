@@ -1,8 +1,7 @@
 name: NOVEX branded assets
 on:
   push:
-    branches:
-      - novex/rebrand
+    branches: [novex/rebrand]
     paths:
       - branding/novex-mark.webp
       - scripts/apply-novex-branding.py

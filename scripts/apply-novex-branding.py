@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild NOVEX icons and reapply the display-name overlay after upstream sync."""
 from pathlib import Path
+from io import BytesIO
 import base64
 import json
 import re
@@ -19,16 +20,33 @@ def render(size: int) -> Image.Image:
     return canvas.convert("RGB")
 
 icons = APP / "icons"
-for size, name in [(32,"32x32.png"),(64,"64x64.png"),(128,"128x128.png"),(256,"128x128@2x.png"),(512,"512x512.png"),(512,"icon.png"),(50,"StoreLogo.png"),(32,"tray.png")]:
+for size, name in [
+    (32, "32x32.png"), (64, "64x64.png"), (128, "128x128.png"),
+    (256, "128x128@2x.png"), (512, "512x512.png"), (512, "icon.png"),
+    (50, "StoreLogo.png"), (32, "tray.png"),
+]:
     render(size).save(icons / name, format="PNG", optimize=True)
+
 master = render(512)
-master.save(icons / "icon.ico", format="ICO", sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+master.save(icons / "icon.ico", format="ICO",
+            sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 master.save(icons / "icon.icns", format="ICNS")
 
-svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{raw.width}" height="{raw.height}" '
-       f'viewBox="0 0 {raw.width} {raw.height}"><image width="{raw.width}" height="{raw.height}" '
-       f'href="data:image/webp;base64,{base64.b64encode(SOURCE.read_bytes()).decode("ascii")}"/></svg>')
-for path in [APP/"assets"/"logo.svg", APP/"assets"/"icons"/"icon-logo.svg", APP/"assets"/"icons"/"pixel"/"icon-logo.svg"]:
+# Embed a PNG in SVGs for broad renderer and Apple asset-catalog compatibility.
+png_buffer = BytesIO()
+raw.save(png_buffer, format="PNG", optimize=True)
+png_data = base64.b64encode(png_buffer.getvalue()).decode("ascii")
+svg = (
+    f'<svg xmlns="http://www.w3.org/2000/svg" width="{raw.width}" height="{raw.height}" '
+    f'viewBox="0 0 {raw.width} {raw.height}"><image width="{raw.width}" height="{raw.height}" '
+    f'href="data:image/png;base64,{png_data}"/></svg>'
+)
+for path in [
+    APP / "assets" / "logo.svg",
+    APP / "assets" / "icons" / "icon-logo.svg",
+    APP / "assets" / "icons" / "pixel" / "icon-logo.svg",
+    APP / "icons" / "OneClient.icon" / "Assets" / "oneclient-mark.svg",
+]:
     path.write_text(svg, encoding="utf-8")
 
 # Change user-facing message values without changing internal translation keys.
@@ -43,7 +61,10 @@ if lang_path.exists():
         if isinstance(value, str):
             return value.replace("OneClient", "NOVEX Client")
         return value
-    lang_path.write_text(json.dumps(rebrand_values(messages), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    lang_path.write_text(
+        json.dumps(rebrand_values(messages), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 # Keep the public package identity stable if upstream changes it.
 manifest = APP / "Cargo.toml"
@@ -57,4 +78,4 @@ if manifest.exists():
         content = re.sub(pattern, replacement, content, count=1)
     manifest.write_text(content, encoding="utf-8")
 
-print("NOVEX branding overlay applied.")
+print("NOVEX branding overlay applied to Windows, macOS, Linux, and in-app assets.")
