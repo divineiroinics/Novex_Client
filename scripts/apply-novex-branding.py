@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild NOVEX icons and reapply the display-name overlay after upstream sync."""
+"""Rebuild NOVEX icons and reapply the display-name/update overlay after upstream sync."""
 from pathlib import Path
 from io import BytesIO
 import base64
@@ -36,7 +36,6 @@ master.save(icons / "icon.ico", format="ICO",
             sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 master.save(icons / "icon.icns", format="ICNS")
 
-# Embed a PNG in SVGs for broad renderer and Apple asset-catalog compatibility.
 png_buffer = BytesIO()
 raw.save(png_buffer, format="PNG", optimize=True)
 png_data = base64.b64encode(png_buffer.getvalue()).decode("ascii")
@@ -53,20 +52,6 @@ for path in [
 ]:
     path.write_text(svg, encoding="utf-8")
 
-# Keep Windows executable version-resource strings branded after upstream sync.
-build_script = APP / "build.rs"
-if build_script.exists():
-    content = build_script.read_text(encoding="utf-8")
-    for old, new in [
-        ('res.set("CompanyName", "Polyfrost Inc.");', 'res.set("CompanyName", "XIRX");'),
-        ('res.set("ProductName", "OneClient");', 'res.set("ProductName", "NOVEX Client");'),
-        ('res.set("FileDescription", "OneClient");', 'res.set("FileDescription", "NOVEX Client");'),
-        ('res.set("LegalCopyright", "© 2026 Polyfrost Inc.");', 'res.set("LegalCopyright", "© 2026 XIRX. Original code © 2026 Polyfrost Inc. and contributors.");'),
-    ]:
-        content = content.replace(old, new)
-    build_script.write_text(content, encoding="utf-8")
-
-# Change user-facing message values without changing internal translation keys.
 lang_path = APP / "lang" / "en_us.json"
 if lang_path.exists():
     messages = json.loads(lang_path.read_text(encoding="utf-8"))
@@ -83,7 +68,6 @@ if lang_path.exists():
         encoding="utf-8",
     )
 
-# Keep the public package identity stable if upstream changes it.
 manifest = APP / "Cargo.toml"
 if manifest.exists():
     content = manifest.read_text(encoding="utf-8")
@@ -95,4 +79,21 @@ if manifest.exists():
         content = re.sub(pattern, replacement, content, count=1)
     manifest.write_text(content, encoding="utf-8")
 
-print("NOVEX branding overlay applied to Windows, macOS, Linux, and in-app assets.")
+# Keep updater URLs pointed at NOVEX, but never ship an unverified update key.
+constants = APP / "src" / "constants.rs"
+if constants.exists():
+    content = constants.read_text(encoding="utf-8")
+    def set_const(source: str, name: str, value: str) -> str:
+        pattern = rf'(?ms)^pub const {name}: &str =\s*".*?";'
+        replacement = f'pub const {name}: &str = "{value}";'
+        if re.search(pattern, source):
+            return re.sub(pattern, replacement, source, count=1)
+        return source.rstrip() + "\n" + replacement + "\n"
+    content = set_const(
+        content, "UPDATER_ENDPOINT",
+        "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json",
+    )
+    content = set_const(content, "UPDATER_PUBKEY", "")
+    constants.write_text(content, encoding="utf-8")
+
+print("NOVEX branding overlay applied; auto-updates remain safely disabled until a NOVEX signing key is configured.")
