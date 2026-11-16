@@ -17,11 +17,11 @@ if raw.width < 128 or raw.height < 128:
     raise SystemExit("Canonical NOVEX logo source is unexpectedly small")
 
 def render(size: int) -> Image.Image:
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 255))
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     mark = raw.copy()
     mark.thumbnail((size, size), Image.Resampling.LANCZOS)
     canvas.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
-    return canvas.convert("RGB")
+    return canvas
 
 icons = APP / "icons"
 for size, name in [

@@ -3,7 +3,8 @@ on:
   push:
     branches: [novex/rebrand]
     paths:
-      - branding/novex-mark.webp
+      - branding/novex-mark.png
+      - scripts/apply-novex-branding.py
       - .github/workflows/novex-brand-assets.yml
   workflow_dispatch:
 permissions:
