@@ -154,7 +154,7 @@ mod tests {
 
         assert_eq!(
             settings.data_dir,
-            Some(std::path::PathBuf::from("D:\\OneClient")),
+            Some(std::path::PathBuf::from("D:\\NOVEX Client")),
             "the location has to survive whatever else is wrong with the file"
         );
         assert!(settings.log_debug);

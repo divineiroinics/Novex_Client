@@ -140,7 +140,7 @@ preinstall-section = """
 Section "-OneClientTauriMigration"
   ; Stale Tauri root start-menu shortcut (this build only writes the sub-folder one).
   Delete "$SMPROGRAMS\\${PRODUCTNAME}.lnk"
-  ; Old Tauri main binary (renamed OneClient.exe -> oneclient_app.exe). Locked while
+  ; Old Tauri main binary (renamed NOVEX Client.exe -> oneclient_app.exe). Locked while
   ; the outdated app is running during an auto-update, so fall back to reboot removal.
   Delete /REBOOTOK "$INSTDIR\\OneClient.exe"
 SectionEnd
