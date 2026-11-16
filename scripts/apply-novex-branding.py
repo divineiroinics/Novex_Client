@@ -8,9 +8,13 @@ import re
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "branding" / "novex-mark.webp"
+SOURCE = ROOT / "branding" / "novex-mark.png"
 APP = ROOT / "packages" / "oneclient_app"
+with Image.open(SOURCE) as source_image:
+    source_image.verify()
 raw = Image.open(SOURCE).convert("RGBA")
+if raw.width < 128 or raw.height < 128:
+    raise SystemExit("Canonical NOVEX logo source is unexpectedly small")
 
 def render(size: int) -> Image.Image:
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 255))
