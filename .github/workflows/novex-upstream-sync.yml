@@ -13,8 +13,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out NOVEX rebrand branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: novex/rebrand
           fetch-depth: 0
@@ -24,39 +23,27 @@ jobs:
           set -euo pipefail
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
-          if git merge-base --is-ancestor upstream/main HEAD; then
-            echo "NOVEX is already up to date with OneLauncher."
-          else
-            git merge --no-edit --no-ff upstream/main || {
-              git merge --abort
-              echo "::error::Upstream changes conflict with NOVEX customizations. Resolve the conflict before syncing."
-              exit 1
-            }
+          if ! git merge-base --is-ancestor upstream/main HEAD; then
+            git merge --no-edit --no-ff upstream/main || { git merge --abort; echo "::error::Upstream conflicts need a manual resolution."; exit 1; }
           fi
       - name: Reapply canonical NOVEX branding
         run: |
           python -m pip install --disable-pip-version-check Pillow
           python scripts/apply-novex-branding.py
-      - name: Validate branded assets and metadata
-        shell: bash
+      - name: Validate branding and formatting
         run: |
-          set -euo pipefail
-          test -s branding/novex-mark.png
+          test -s branding/novex-mark.webp
           test -s packages/oneclient_app/icons/icon.ico
-          test -s packages/oneclient_app/assets/logo.svg
+          test -s packages/oneclient_app/icons/icon.icns
           grep -q "NOVEX Client" packages/oneclient_app/lang/en_us.json
           grep -q "XIRX" packages/oneclient_app/Cargo.toml
           cargo fmt --all -- --check
-      - name: Open or update upstream sync pull request
-        uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: novex/rebrand
           branch: novex/upstream-sync
           delete-branch: true
           title: "Sync latest OneLauncher updates into NOVEX"
-          body: |
-            Automated upstream sync from Polyfrost/OneLauncher.
-
-            The NOVEX branding overlay is reapplied after the merge. Review CI and resolve any upstream compatibility changes before merging.
+          body: "Automated upstream sync. NOVEX branding is reapplied after merging upstream; review checks before merging."
           commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
