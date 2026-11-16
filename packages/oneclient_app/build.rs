@@ -8,7 +8,10 @@ fn main() {
         res.set("CompanyName", "XIRX");
         res.set("ProductName", "NOVEX Client");
         res.set("FileDescription", "NOVEX Client");
-        res.set("LegalCopyright", "© 2026 XIRX. Original code © 2026 Polyfrost Inc. and contributors.");
+        res.set(
+            "LegalCopyright",
+            "© 2026 XIRX. Original code © 2026 Polyfrost Inc. and contributors.",
+        );
         res.set("OriginalFilename", "oneclient_app.exe");
         res.set("InternalName", "oneclient_app");
         res.set("FileVersion", version);
