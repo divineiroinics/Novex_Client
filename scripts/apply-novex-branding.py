@@ -79,6 +79,13 @@ if manifest.exists():
         content = re.sub(pattern, replacement, content, count=1)
     manifest.write_text(content, encoding="utf-8")
 
+# Keep the launcher label shown in diagnostics branded without renaming internal crates.
+common_constants = ROOT / "packages" / "oneclient_common" / "src" / "constants.rs"
+if common_constants.exists():
+    content = common_constants.read_text(encoding="utf-8")
+    content = content.replace('    "OneClient v",', '    "NOVEX Client v",')
+    common_constants.write_text(content, encoding="utf-8")
+
 # Keep updater URLs pointed at NOVEX, but never ship an unverified update key.
 constants = APP / "src" / "constants.rs"
 if constants.exists():
