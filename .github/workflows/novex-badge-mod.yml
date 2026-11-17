@@ -5,10 +5,12 @@ on:
     branches: [novex/rebrand]
     paths:
       - "novex-badge-mod/**"
+      - "packages/oneclient_app/icons/OneClient.icon/Assets/novex-mark.svg"
       - ".github/workflows/novex-badge-mod.yml"
   pull_request:
     paths:
       - "novex-badge-mod/**"
+      - "packages/oneclient_app/icons/OneClient.icon/Assets/novex-mark.svg"
       - ".github/workflows/novex-badge-mod.yml"
   workflow_dispatch:
 
@@ -37,4 +39,4 @@ jobs:
           path: |
             novex-badge-mod/build/libs/*.jar
             !novex-badge-mod/build/libs/*-sources.jar
-          if-no-files-found: warn
+          if-no-files-found: error
