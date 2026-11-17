@@ -1,4 +1,5 @@
 use freya::prelude::*;
+use freya::query::MutationStateData;
 use oneclient_auth::MinecraftAccount;
 
 use crate::components::{Avatar, Button, Icon, IconType, TextInput, use_microsoft_login};
@@ -21,6 +22,11 @@ impl Component for OnboardingAccount {
         let msa = use_microsoft_login();
         let offline = use_add_offline_account();
         let offline_pending = offline.read().state().is_loading();
+        let offline_error = match &*offline.read().state() {
+            MutationStateData::Settled { res: Err(err), .. }
+            | MutationStateData::Loading { res: Some(Err(err)) } => Some(err.to_string()),
+            _ => None,
+        };
         let offline_username = use_state(|| String::new());
 
         let account = try_default_account(&account_query);
@@ -68,6 +74,13 @@ impl Component for OnboardingAccount {
                                     "Continue Offline"
                                 }),
                         )
+                        .maybe_child(offline_error.map(|message| {
+                            label()
+                                .text(message)
+                                .font_size(text_size(12.))
+                                .color(colors::danger())
+                                .into_element()
+                        }))
                         .child(
                             label()
                                 .text("Choose an offline username. You can connect a Microsoft account later.")
