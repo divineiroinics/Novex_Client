@@ -1,0 +1,38 @@
+name: NOVEX Badge Mod
+
+on:
+  push:
+    branches: [novex/rebrand]
+    paths:
+      - "novex-badge-mod/**"
+      - ".github/workflows/novex-badge-mod.yml"
+  pull_request:
+    paths:
+      - "novex-badge-mod/**"
+      - ".github/workflows/novex-badge-mod.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@ddcfe5a0f4e9d07a58c5a7d9b2fdddb35e3a3f0a # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Build Fabric mod
+        working-directory: novex-badge-mod
+        run: gradle --no-daemon clean build
+      - name: Upload mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVEX-Badges-Fabric-1.21.1
+          path: novex-badge-mod/build/libs/*-all.jar
+          if-no-files-found: warn

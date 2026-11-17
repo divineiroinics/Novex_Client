@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "org.xirx.novexbadge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "EntityDisplayNameMixin",
+    "PlayerListEntryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
