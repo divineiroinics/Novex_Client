@@ -554,6 +554,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_offline_profile_launches_without_a_microsoft_account() {
+        let account = crate::offline::offline_account("NovexOffline".to_string());
+        let id = account.id;
+        let mut store = CredentialsStore::default();
+        store.users.insert(id, account);
+        store.default_user = Some(id);
+
+        let (events, _rx) = EventBus::channel();
+        let net = RequestClient::new(NetConfig::default()).expect("net client");
+        let service = AuthService::with_store(store, net, events);
+
+        let launched_account = service
+            .default_account_for_launch()
+            .await
+            .expect("offline profile should be launchable without Microsoft")
+            .expect("offline profile should be selected as default");
+
+        assert_eq!(launched_account.id, id);
+        assert!(launched_account.is_offline());
+        assert!(launched_account.access_token.is_empty());
+    }
+
+    #[tokio::test]
     async fn a_signed_out_account_still_launches_without_touching_the_network() {
         let (service, id) = signed_out_service();
 
