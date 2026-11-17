@@ -239,6 +239,29 @@ jobs:
             exit 1
           fi
 
+      - name: Validate NOVEX release signing configuration
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+          NOVEX_SIGNPATH_PROJECT_SLUG: ${{ vars.NOVEX_SIGNPATH_PROJECT_SLUG }}
+          NOVEX_SIGNPATH_BINARY_CONFIGURATION_SLUG: ${{ vars.NOVEX_SIGNPATH_BINARY_CONFIGURATION_SLUG }}
+          NOVEX_SIGNPATH_INSTALLER_CONFIGURATION_SLUG: ${{ vars.NOVEX_SIGNPATH_INSTALLER_CONFIGURATION_SLUG }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in SIGNPATH_API_TOKEN SIGNPATH_ORGANIZATION_ID CARGO_PACKAGER_SIGN_PRIVATE_KEY CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD NOVEX_SIGNPATH_PROJECT_SLUG NOVEX_SIGNPATH_BINARY_CONFIGURATION_SLUG NOVEX_SIGNPATH_INSTALLER_CONFIGURATION_SLUG; do
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing NOVEX release-signing configuration: %s\\n' "${missing[*]}"
+            echo 'Configure the listed repository Actions secrets/variables using docs/NOVEX-RELEASE-SIGNING.md.'
+            exit 1
+          fi
+
       - name: Build release binary
         shell: bash
         env:
@@ -277,9 +300,9 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: onelauncher
+          project-slug: ${{ vars.NOVEX_SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: release-signing
-          artifact-configuration-slug: onelauncher-binary
+          artifact-configuration-slug: ${{ vars.NOVEX_SIGNPATH_BINARY_CONFIGURATION_SLUG }}
           github-artifact-id: ${{ steps.win_upload_unsigned_bin.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: signed-bin
@@ -468,9 +491,9 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: onelauncher
+          project-slug: ${{ vars.NOVEX_SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: release-signing
-          artifact-configuration-slug: onelauncher-installer
+          artifact-configuration-slug: ${{ vars.NOVEX_SIGNPATH_INSTALLER_CONFIGURATION_SLUG }}
           github-artifact-id: ${{ steps.win_upload_unsigned.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: signed
