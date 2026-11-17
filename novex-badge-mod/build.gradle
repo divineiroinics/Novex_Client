@@ -40,8 +40,10 @@ tasks.register("extractNovexBadge") {
     }
 }
 
-tasks.named("sourcesJar") {
-    dependsOn tasks.named("extractNovexBadge")
+tasks.configureEach {
+    if (name == "sourcesJar") {
+        dependsOn(tasks.named("extractNovexBadge"))
+    }
 }
 
 processResources {
