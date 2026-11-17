@@ -100,9 +100,9 @@ if constants.exists():
     def set_const(source: str, name: str, expression: str) -> str:
         # Remove every old definition, including option_env! expressions.
         # The previous literal-only matcher could append duplicate constants.
-        pattern = rf'(?ms)^pub const {name}: &str =.*?;[ \\t]*(?:\\n|$)'
+        pattern = rf'(?ms)^pub const {name}: &str =.*?;[ \t]*(?:\n|$)'
         source = re.sub(pattern, "", source)
-        return source.rstrip() + "\\n\\n" + f"pub const {name}: &str = {expression};" + "\\n"
+        return source.rstrip() + "\n\n" + f"pub const {name}: &str = {expression};" + "\n"
 
     content = set_const(
         content, "UPDATER_ENDPOINT",
