@@ -42,3 +42,6 @@ jobs:
           cache-namespace: auth-check-cache
       - name: Check Microsoft authentication crate
         run: cargo check --locked -p oneclient_auth
+
+      - name: Test offline-first account creation
+        run: cargo test --locked -p oneclient_auth offline_
