@@ -18,6 +18,13 @@ function reply(body: unknown, status = 200, cache = "no-store") {
   });
 }
 
+function canonicalUuid(raw: string): string {
+  const value = raw.toLowerCase().replace(/-/g, "");
+  return value.length === 32
+    ? `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`
+    : "";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
@@ -26,15 +33,72 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json(); }
   catch { return reply({ error: "invalid_json" }, 400); }
 
-  const uuid = (body as { minecraft_uuid?: unknown })?.minecraft_uuid;
-  if (typeof uuid !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid)) {
-    return reply({ error: "invalid_minecraft_uuid" }, 400);
-  }
+  const input = body as {
+    action?: unknown;
+    minecraft_uuid?: unknown;
+    minecraft_access_token?: unknown;
+  };
 
   const projectUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!projectUrl || !serviceKey) return reply({ error: "service_unavailable" }, 503);
+
+  if (input?.action === "verify") {
+    const token = input.minecraft_access_token;
+    if (typeof token !== "string" || token.length < 20 || token.length > 8192) {
+      return reply({ error: "invalid_minecraft_access_token" }, 400);
+    }
+
+    try {
+      // The token is used only for this upstream profile request and is never
+      // written to logs or stored in Supabase.
+      const profileResponse = await fetch("https://api.minecraftservices.com/minecraft/profile", {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" },
+      });
+
+      if (profileResponse.status === 401 || profileResponse.status === 403) {
+        return reply({ error: "minecraft_token_rejected" }, 401);
+      }
+      if (!profileResponse.ok) return reply({ error: "minecraft_profile_unavailable" }, 502);
+
+      const profile = await profileResponse.json() as { id?: unknown; name?: unknown };
+      if (typeof profile.id !== "string" || !/^[0-9a-f]{32}$/i.test(profile.id) ||
+          typeof profile.name !== "string" || !/^[A-Za-z0-9_]{1,16}$/.test(profile.name)) {
+        return reply({ error: "invalid_minecraft_profile" }, 502);
+      }
+
+      const minecraftUuid = canonicalUuid(profile.id);
+      const saved = await fetch(`${projectUrl}/rest/v1/rpc/novex_register_verified_profile`, {
+        method: "POST",
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_minecraft_uuid: minecraftUuid,
+          p_minecraft_username: profile.name,
+        }),
+      });
+      if (!saved.ok) return reply({ error: "verification_save_failed" }, 502);
+
+      return reply({
+        verified: true,
+        minecraft_uuid: minecraftUuid,
+        minecraft_username: profile.name,
+        method: "minecraft_services_profile",
+      });
+    } catch {
+      return reply({ error: "verification_unavailable" }, 503);
+    }
+  }
+
+  const uuid = input?.minecraft_uuid;
+  if (typeof uuid !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid)) {
+    return reply({ error: "invalid_minecraft_uuid" }, 400);
+  }
 
   try {
     const response = await fetch(`${projectUrl}/rest/v1/rpc/novex_lookup_badge`, {
