@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-java@ddcfe5a0f4e9d07a58c5a7d9b2fdddb35e3a3f0a # v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
@@ -34,5 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NOVEX-Badges-Fabric-1.21.1
-          path: novex-badge-mod/build/libs/*-all.jar
+          path: |
+            novex-badge-mod/build/libs/*.jar
+            !novex-badge-mod/build/libs/*-sources.jar
           if-no-files-found: warn
