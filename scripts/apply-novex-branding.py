@@ -5,7 +5,7 @@ from io import BytesIO
 import base64
 import json
 import re
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "branding" / "novex-mark.png"
@@ -25,9 +25,12 @@ if alpha_bounds:
 def render(size: int) -> Image.Image:
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     mark = raw.copy()
-    edge = max(1, round(size * 0.92))
+    edge = max(1, round(size * 1.00))
     mark.thumbnail((edge, edge), Image.Resampling.LANCZOS)
     canvas.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
+    if size <= 32:
+        # Keep the angular NOVEX mark crisp at Windows shortcut/taskbar sizes.
+        canvas = canvas.filter(ImageFilter.UnsharpMask(radius=0.7, percent=180, threshold=2))
     return canvas
 
 icons = APP / "icons"
