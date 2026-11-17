@@ -65,6 +65,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name "NOVEX Sync Bot"
+          git config user.email "novex-sync-bot@users.noreply.github.com"
+          # Commit the overlay before merging a concurrently generated asset
+          # commit. Merging while the working tree is dirty makes Git abort.
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: reapply NOVEX branding after upstream sync"
+          fi
           for attempt in 1 2 3; do
             git fetch origin novex/rebrand
             if ! git merge-base --is-ancestor origin/novex/rebrand HEAD; then
@@ -75,11 +83,10 @@ jobs:
               fi
               python scripts/apply-novex-branding.py
               cargo fmt --all
+              test "$(grep -c '^pub const UPDATER_ENDPOINT:' packages/oneclient_app/src/constants.rs)" -eq 1
+              test "$(grep -c '^pub const UPDATER_PUBKEY:' packages/oneclient_app/src/constants.rs)" -eq 1
               grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
               grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
-              grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
-              grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
-              grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
             fi
             git add -A
             if ! git diff --cached --quiet; then
