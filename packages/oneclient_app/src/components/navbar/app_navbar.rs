@@ -141,17 +141,17 @@ impl Component for NavbarLogo {
                     .child(
                         label()
                             .text("NOVEX")
-                    .font_family(theme::font())
-                    .font_weight(FontWeight::BOLD)
-                    .font_size(text_size(24.))
-                    .color(theme::colors::danger()),
-            )
-            .child(
-                label()
-                    .text(" Client")
-                    .font_family(theme::font())
-                    .font_weight(FontWeight::BOLD)
-                    .font_size(text_size(24.))
+                            .font_family(theme::font())
+                            .font_weight(FontWeight::BOLD)
+                            .font_size(text_size(24.))
+                            .color(theme::colors::danger()),
+                    )
+                    .child(
+                        label()
+                            .text(" Client")
+                            .font_family(theme::font())
+                            .font_weight(FontWeight::BOLD)
+                            .font_size(text_size(24.))
                             .color(primary_color(self.over_art)),
                     )
                     .into_element(),
