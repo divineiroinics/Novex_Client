@@ -1,6 +1,7 @@
 package org.xirx.novexbadge;
 
 import net.minecraft.text.Text;
+import net.minecraft.text.MutableText;
 import net.minecraft.util.Formatting;
 
 public final class BadgeText {
@@ -9,7 +10,7 @@ public final class BadgeText {
     public static Text prepend(Text original, Badge badge) {
         if (original == null || badge == null) return original;
 
-        Text marker;
+        MutableText marker;
         if (badge == Badge.PLUS) {
             marker = Text.literal("✦").formatted(Formatting.GOLD)
                     .append(Text.literal("+").formatted(Formatting.AQUA));
