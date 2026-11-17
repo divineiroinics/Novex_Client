@@ -175,7 +175,7 @@ impl AuthService {
                 .post("https://epsqlgboxuwbfedqhuax.supabase.co/functions/v1/novex-badge-lookup")
                 .json(&serde_json::json!({
                     "action": "verify",
-                    "minecraft_access_token": account.access_token,
+                    "minecraft_access_token": &account.access_token,
                 }))
                 .send()
                 .await;
