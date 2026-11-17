@@ -97,21 +97,26 @@ if common_constants.exists():
 constants = APP / "src" / "constants.rs"
 if constants.exists():
     content = constants.read_text(encoding="utf-8")
-    def set_const(source: str, name: str, value: str) -> str:
-        pattern = rf'(?ms)^pub const {name}: &str =\s*".*?";\s*'
+    def set_const(source: str, name: str, expression: str) -> str:
+        # Remove every old definition, including option_env! expressions.
+        # The previous literal-only matcher could append duplicate constants.
+        pattern = rf'(?ms)^pub const {name}: &str =.*?;[ \\t]*(?:\\n|$)'
         source = re.sub(pattern, "", source)
-        replacement = f'pub const {name}: &str = "{value}";'
-        return source.rstrip() + "\n\n" + replacement + "\n"
+        return source.rstrip() + "\\n\\n" + f"pub const {name}: &str = {expression};" + "\\n"
+
     content = set_const(
         content, "UPDATER_ENDPOINT",
-        "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json",
+        '"https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json"',
     )
-    content = set_const(content, "UPDATER_PUBKEY", "")
-    content = content.replace(
-        'pub const UPDATER_PUBKEY: &str = "";',
-        'pub const UPDATER_PUBKEY: &str = match option_env!("NOVEX_UPDATER_PUBKEY") { Some(value) => value, None => "" };',
+    content = set_const(
+        content, "UPDATER_PUBKEY",
+        'match option_env!("NOVEX_UPDATER_PUBKEY") { Some(value) => value, None => "" }',
     )
     constants.write_text(content, encoding="utf-8")
+    for name in ("UPDATER_ENDPOINT", "UPDATER_PUBKEY"):
+        count = len(re.findall(rf"(?m)^pub const {name}:", content))
+        if count != 1:
+            raise SystemExit(f"Expected exactly one {name} definition, found {count}")
 
 # Rebrand literal UI/runtime strings throughout source without renaming internal
 # Rust crate/module/type identifiers that are part of upstream architecture.

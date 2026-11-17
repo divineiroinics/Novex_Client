@@ -6,9 +6,5 @@ pub const LATEST_RELEASE_URL: &str =
 pub const RELEASES_URL: &str = "https://github.com/divineiroinics/Novex_Client/releases/latest";
 
 // NOVEX auto-updates stay disabled until a matching release-signing key is configured.
-
-pub const UPDATER_PUBKEY: &str = match option_env!("NOVEX_UPDATER_PUBKEY") { Some(value) => value, None => "" };
-
 pub const UPDATER_ENDPOINT: &str = "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json";
-
 pub const UPDATER_PUBKEY: &str = match option_env!("NOVEX_UPDATER_PUBKEY") { Some(value) => value, None => "" };
