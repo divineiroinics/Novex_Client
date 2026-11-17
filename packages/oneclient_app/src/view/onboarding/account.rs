@@ -1,8 +1,7 @@
 use freya::prelude::*;
-use freya::query::MutationStateData;
 use oneclient_auth::MinecraftAccount;
 
-use crate::components::{Avatar, Button, Icon, IconType, use_microsoft_login};
+use crate::components::{Avatar, Button, Icon, IconType, TextInput, use_microsoft_login};
 use crate::hooks::{
     AddOfflineAccountKeys, try_default_account, use_add_offline_account, use_current_account,
 };
@@ -22,6 +21,7 @@ impl Component for OnboardingAccount {
         let msa = use_microsoft_login();
         let offline = use_add_offline_account();
         let offline_pending = offline.read().state().is_loading();
+        let offline_username = use_state(|| String::new());
 
         let account = try_default_account(&account_query);
         let has_account = account.is_some();
@@ -39,6 +39,7 @@ impl Component for OnboardingAccount {
                 None => {
                     let start = msa.clone();
                     let offline_add = offline.clone();
+                    let offline_name = offline_username.clone();
                     rect()
                         .vertical()
                         .width(Size::fill())
@@ -47,14 +48,19 @@ impl Component for OnboardingAccount {
                             sign_in_card(msa.pending, msa.error.clone(), move |_| start.start()),
                         )
                         .child(
+                            TextInput::new(offline_username)
+                                .placeholder("Offline Minecraft username"),
+                        )
+                        .child(
                             Button::new()
                                 .secondary()
                                 .large()
-                                .enabled(!offline_pending)
+                                .enabled(!offline_pending && !offline_name.peek().trim().is_empty())
                                 .on_press(move |_| {
-                                    offline_add.mutate(AddOfflineAccountKeys {
-                                        username: "Player".to_string(),
-                                    });
+                                    let username = offline_name.peek().trim().to_string();
+                                    if !username.is_empty() {
+                                        offline_add.mutate(AddOfflineAccountKeys { username });
+                                    }
                                 })
                                 .text(if offline_pending {
                                     "Creating offline profile"
@@ -64,7 +70,7 @@ impl Component for OnboardingAccount {
                         )
                         .child(
                             label()
-                                .text("You can use an offline profile now and connect a Microsoft account later.")
+                                .text("Choose an offline username. You can connect a Microsoft account later.")
                                 .font_size(text_size(12.))
                                 .color(colors::fg_secondary()),
                         )
