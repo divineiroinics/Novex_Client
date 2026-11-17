@@ -171,24 +171,28 @@ impl AuthService {
         if account.is_microsoft() {
             // Send the short-lived Minecraft Services token only for a live
             // profile check. The NOVEX endpoint discards it after verification.
-            let verification = self.net.http()
+            let verification_request = self.net.http()
                 .post("https://epsqlgboxuwbfedqhuax.supabase.co/functions/v1/novex-badge-lookup")
                 .json(&serde_json::json!({
                     "action": "verify",
                     "minecraft_access_token": &account.access_token,
                 }))
-                .send()
-                .await;
+                .build();
 
-            match verification {
-                Ok(response) if response.status().is_success() => {
-                    tracing::info!("NOVEX verified the Microsoft Minecraft profile");
-                }
-                Ok(response) => {
-                    tracing::warn!(status = %response.status(), "NOVEX profile verification was unavailable");
-                }
+            match verification_request {
+                Ok(request) => match self.net.send(request).await {
+                    Ok(response) if response.status().is_success() => {
+                        tracing::info!("NOVEX verified the Microsoft Minecraft profile");
+                    }
+                    Ok(response) => {
+                        tracing::warn!(status = %response.status(), "NOVEX profile verification was unavailable");
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "NOVEX profile verification request failed");
+                    }
+                },
                 Err(error) => {
-                    tracing::warn!(%error, "NOVEX profile verification request failed");
+                    tracing::warn!(%error, "Could not prepare NOVEX profile verification request");
                 }
             }
         }
