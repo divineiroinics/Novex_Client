@@ -40,6 +40,10 @@ tasks.register("extractNovexBadge") {
     }
 }
 
+tasks.named("sourcesJar") {
+    dependsOn tasks.named("extractNovexBadge")
+}
+
 processResources {
     dependsOn tasks.named("extractNovexBadge")
     inputs.property "version", project.version
