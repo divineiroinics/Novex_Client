@@ -177,6 +177,7 @@ impl AuthService {
                     "action": "verify",
                     "minecraft_access_token": &account.access_token,
                 }))
+                .timeout(std::time::Duration::from_secs(8))
                 .build();
 
             match verification_request {
