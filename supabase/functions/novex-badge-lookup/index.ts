@@ -29,9 +29,19 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
 
+  const declaredLength = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > 12_288) {
+    return reply({ error: "request_too_large" }, 413);
+  }
+
   let body: unknown;
-  try { body = await req.json(); }
-  catch { return reply({ error: "invalid_json" }, 400); }
+  try {
+    const rawBody = await req.text();
+    if (rawBody.length > 12_288) return reply({ error: "request_too_large" }, 413);
+    body = JSON.parse(rawBody);
+  } catch {
+    return reply({ error: "invalid_json" }, 400);
+  }
 
   const input = body as {
     action?: unknown;
@@ -55,6 +65,7 @@ Deno.serve(async (req: Request) => {
       const profileResponse = await fetch("https://api.minecraftservices.com/minecraft/profile", {
         method: "GET",
         headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" },
+        signal: AbortSignal.timeout(8_000),
       });
 
       if (profileResponse.status === 401 || profileResponse.status === 403) {
@@ -80,6 +91,7 @@ Deno.serve(async (req: Request) => {
           p_minecraft_uuid: minecraftUuid,
           p_minecraft_username: profile.name,
         }),
+        signal: AbortSignal.timeout(8_000),
       });
       if (!saved.ok) return reply({ error: "verification_save_failed" }, 502);
 
