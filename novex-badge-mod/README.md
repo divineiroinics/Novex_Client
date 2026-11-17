@@ -18,7 +18,7 @@ This first build target is intentionally explicit. It is **not yet compatible wi
 - Adds a compact badge marker to player display names and player-list entries.
 - Does not trust a username, client-supplied tier, or offline-mode UUID.
 
-The database lookup only returns identities that are both verified and in online account mode. Offline/cracked UUIDs are not globally trustworthy: they can be spoofed by another client, so this service does not award globally visible verified badges to them.
+The database lookup only returns identities verified by Minecraft Services. When a player completes the launcher's existing Microsoft → Xbox → Minecraft sign-in, NOVEX sends the resulting short-lived Minecraft Services access token to its Edge Function. The function calls Minecraft's official profile endpoint, stores only the returned UUID and current username, and discards the token. The token is not written to logs or the database. Offline/cracked UUIDs cannot be verified this way and are not awarded globally trusted badges.
 
 ## Build
 
@@ -32,4 +32,4 @@ The jar is written to `build/libs/`.
 
 ## Important integration status
 
-This is a standalone mod project. The OneClient launcher does not yet bundle or auto-install this jar into Fabric instances. That launcher integration, Microsoft account linking, plus entitlement administration, exact NOVEX emblem glyph/texture, and testing against other supported Minecraft versions remain follow-up work. Do not advertise the badge system as production-ready until those are complete.
+This is still a standalone mod project. The launcher now submits Microsoft-authenticated Minecraft profiles for server-side verification, but it does not yet bundle or auto-install this jar into Fabric instances. Plus entitlement administration, exact NOVEX emblem glyph/texture, additional Minecraft-version builds, rate limiting/abuse monitoring, and end-to-end multiplayer tests remain follow-up work. Do not advertise the badge system as production-ready until those are complete.
