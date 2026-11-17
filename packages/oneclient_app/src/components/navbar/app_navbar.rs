@@ -132,7 +132,7 @@ impl Component for NavbarLogo {
             .horizontal()
             .cross_align(Alignment::Center)
             .spacing(8.)
-            .child(Icon::new(IconType::IconLogo).size(28.))
+            .child(Icon::new(IconType::IconLogo).size(32.))
             .child(
                 rect()
                     .horizontal()
@@ -143,7 +143,7 @@ impl Component for NavbarLogo {
                             .text("NOVEX")
                             .font_family(theme::font())
                             .font_weight(FontWeight::BOLD)
-                            .font_size(text_size(24.))
+                            .font_size(text_size(30.))
                             .color(theme::colors::danger()),
                     )
                     .child(
@@ -151,7 +151,7 @@ impl Component for NavbarLogo {
                             .text(" Client")
                             .font_family(theme::font())
                             .font_weight(FontWeight::BOLD)
-                            .font_size(text_size(24.))
+                            .font_size(text_size(30.))
                             .color(primary_color(self.over_art)),
                     )
                     .into_element(),
