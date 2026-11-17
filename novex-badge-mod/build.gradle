@@ -20,7 +20,28 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
+def badgeSvg = file("../packages/oneclient_app/icons/OneClient.icon/Assets/novex-mark.svg")
+def badgePng = file("src/main/resources/assets/novex_badges/textures/novex_badge.png")
+
+tasks.register("extractNovexBadge") {
+    inputs.file(badgeSvg)
+    outputs.file(badgePng)
+    doLast {
+        if (!badgeSvg.isFile()) {
+            throw new GradleException("NOVEX source emblem is missing: ${badgeSvg}")
+        }
+        def svg = badgeSvg.getText("UTF-8")
+        def matcher = (svg =~ /data:image\/png;base64,([^"]+)/)
+        if (!matcher.find()) {
+            throw new GradleException("NOVEX source emblem does not contain its embedded PNG")
+        }
+        badgePng.parentFile.mkdirs()
+        badgePng.bytes = java.util.Base64.decoder.decode(matcher.group(1))
+    }
+}
+
 processResources {
+    dependsOn tasks.named("extractNovexBadge")
     inputs.property "version", project.version
     filesMatching("fabric.mod.json") {
         expand "version": project.version
