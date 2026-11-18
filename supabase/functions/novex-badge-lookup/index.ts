@@ -56,9 +56,10 @@ Deno.serve(async (req: Request) => {
   const action = input?.action === "verify" ? "verify" : "lookup";
   // Supabase's edge proxy supplies the client address. Hash it before sending
   // it to the database; the raw address is never persisted.
-  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const clientAddress = forwarded || req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-real-ip") || "unknown";
+  const forwardedChain = req.headers.get("x-forwarded-for")?.split(",");
+  const forwarded = forwardedChain?.at(-1)?.trim();
+  const clientAddress = req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-real-ip") || forwarded || "unknown";
   const addressBytes = new TextEncoder().encode(clientAddress);
   const addressHash = await crypto.subtle.digest("SHA-256", addressBytes);
   const keyHash = Array.from(new Uint8Array(addressHash))
