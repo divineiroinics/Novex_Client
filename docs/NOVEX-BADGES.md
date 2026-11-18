@@ -42,7 +42,7 @@ The verification response returns the UUID and username confirmed by Minecraft S
 - Offline/cracked UUIDs are not globally verifiable and are excluded from verified badge lookup.
 - The Edge Function does not expose service-role credentials.
 - Plus entitlement rows must be created by a trusted server-side/admin process; never accept a tier from client metadata.
-- The Edge Function currently has no dedicated per-IP/per-UUID rate limiter; add one before public launch.
+- The Edge Function applies atomic per-client-address limits: 120 badge lookups per minute and 5 verification attempts per hour. It stores only a SHA-256 address hash, not the raw address, and fails closed if the limiter database call is unavailable. These limits are a baseline abuse control, not a substitute for monitoring or provider-level DDoS protection.
 
 ## Current implementation boundaries
 
