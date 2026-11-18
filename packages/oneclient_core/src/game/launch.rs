@@ -1310,7 +1310,7 @@ async fn install_novex_badge_mod(
 
     if cluster.mc_loader != oneclient_common::domain::GameLoader::Fabric
         || minecraft_version != "1.21.1"
-        || NOVEX_BADGE_MOD_JAR.is_empty()
+        || crate::NOVEX_BADGE_MOD_JAR.is_empty()
     {
         return;
     }
@@ -1328,7 +1328,7 @@ async fn install_novex_badge_mod(
     }
 
     let temporary = destination.with_extension("jar.tmp");
-    if let Err(err) = tokio::fs::write(&temporary, NOVEX_BADGE_MOD_JAR).await {
+    if let Err(err) = tokio::fs::write(&temporary, crate::NOVEX_BADGE_MOD_JAR).await {
         tracing::warn!(error = %err, "could not stage the NOVEX badge mod");
         return;
     }
