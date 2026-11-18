@@ -1,9 +1,17 @@
 #![recursion_limit = "256"]
 
 // Populated by build.rs on supported CI builds. Empty on developer builds
-// that do not have the separately-built Fabric badge jar staged.
-pub(crate) const NOVEX_BADGE_MOD_JAR: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.1.jar"));
+// that do not have the separately-built Fabric badge jars staged.
+pub(crate) mod novex_badge_mods {
+    pub const MC_1_21_1: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.1.jar"));
+    pub const MC_1_21_4: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.4.jar"));
+    pub const MC_1_21_5: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.5.jar"));
+    pub const MC_1_21_8: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.8.jar"));
+}
 
 #[cfg(debug_assertions)]
 pub mod dev;
