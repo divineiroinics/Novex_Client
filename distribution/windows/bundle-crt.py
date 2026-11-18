@@ -56,7 +56,7 @@ def find_crt_dir() -> Path:
         # Sorting full paths lexicographically misorders versions (for example,
         # 14.9 can sort after 14.50), potentially bundling an older CRT.
         for part in path.parts:
-            if re.fullmatch(r"\\d+(?:\\.\\d+){2,}", part):
+            if re.fullmatch(r"\d+(?:\.\d+){2,}", part):
                 return tuple(int(component) for component in part.split("."))
         return ()
 
