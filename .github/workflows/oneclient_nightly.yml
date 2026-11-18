@@ -73,21 +73,18 @@ jobs:
         shell: bash
         run: echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.macos_deployment_target }}" >> "$GITHUB_ENV"
 
-      - name: (Windows) Build the bundled NOVEX badge mod
-        if: matrix.platform == 'windows-latest'
+      - name: Build the bundled NOVEX badge mod
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
-      - name: (Windows) Set up Gradle
-        if: matrix.platform == 'windows-latest'
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
 
-      - name: (Windows) Compile and stage supported NOVEX badge mods
-        if: matrix.platform == 'windows-latest'
+      - name: Compile and stage supported NOVEX badge mods
         shell: bash
         run: |
           set -euo pipefail
