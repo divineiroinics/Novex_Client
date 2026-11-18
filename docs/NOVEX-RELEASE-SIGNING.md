@@ -1,22 +1,20 @@
-# NOVEX release signing
+# NOVEX automatic update signing
 
-NOVEX updates are verified with cargo-packager signatures. Never commit the private signing key.
+NOVEX automatic updates use cargo-packager signatures. The public key is embedded in release builds; the matching private key is used only by GitHub Actions to sign each Windows installer. Never commit or share the private key.
 
 ## One-time repository configuration
 
-1. Generate a persistent key pair with the pinned cargo-packager tool using `cargo packager signer generate`.
-2. Store the private key in the repository Actions secret `CARGO_PACKAGER_SIGN_PRIVATE_KEY`.
-3. Store its password in the repository Actions secret `CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD`.
-4. Store the matching public key (the public half printed by the generator) in the repository Actions variable `NOVEX_UPDATER_PUBKEY`.
-5. Create a NOVEX project in SignPath and configure its Windows binary and installer artifact configurations with the repository's signing policy.
-6. Store these SignPath values as repository Actions secrets:
-   - `SIGNPATH_API_TOKEN`
-   - `SIGNPATH_ORGANIZATION_ID`
-7. Store these project-specific slugs as repository Actions variables:
-   - `NOVEX_SIGNPATH_PROJECT_SLUG`
-   - `NOVEX_SIGNPATH_BINARY_CONFIGURATION_SLUG`
-   - `NOVEX_SIGNPATH_INSTALLER_CONFIGURATION_SLUG`
+1. On a trusted local machine, use the same pinned cargo-packager version as the release workflow (`0.11.8`) and run `cargo packager signer generate`.
+2. Save the generated private key and its password securely. Do not paste either into chat, an issue, a commit, or a workflow file.
+3. Add the private key as the repository Actions secret `CARGO_PACKAGER_SIGN_PRIVATE_KEY`.
+4. Add its password as the repository Actions secret `CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD`.
+5. Add the matching public key as the repository Actions variable `NOVEX_UPDATER_PUBKEY`.
 
-The release workflow now reads the SignPath project and artifact-configuration slugs from NOVEX variables. It no longer submits signing requests to the upstream OneLauncher SignPath project. A Windows release preflight checks that all required signing secrets and variables exist before building.
+The Windows release workflow checks that all three values exist before building. It signs the Windows installer with the cargo-packager key, writes the matching signature into the update manifest, validates the manifest, uploads `latest.json`, and only then publishes the GitHub release. This order ensures the public `/releases/latest/download/latest.json` endpoint cannot point at a draft or incomplete release.
 
-Keep the cargo-packager key pair stable for every release. Replacing it without a planned key rotation makes installed clients unable to verify future updates. Nightly builds remain unsigned and keep automatic updates disabled. Windows code signing and Apple notarization use separate credentials.
+## Key safety
+
+- Keep this key pair stable across releases. Replacing it without a planned key rotation prevents already-installed clients from verifying future updates.
+- The private key and password must remain GitHub Actions secrets. The public key is safe to store as a repository Actions variable.
+- Nightly builds remain unsigned and do not auto-update.
+- Windows Authenticode / SmartScreen signing is separate and intentionally not required for the updater signature. It can be added later without changing the updater trust key.
