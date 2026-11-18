@@ -16,7 +16,7 @@ fn main() {
     } else {
         // Non-Windows and local builds can still compile without Java/Gradle.
         // The launcher simply skips auto-install when this placeholder is empty.
-        fs::write(&out_jar, [])
+        fs::write(&out_jar, b"")
             .expect("failed to create empty NOVEX badge mod placeholder");
     }
 }
