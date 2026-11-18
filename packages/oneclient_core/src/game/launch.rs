@@ -440,6 +440,7 @@ async fn start(
     )?;
 
     let mods_dir = paths::cluster_mods_dir(&cluster.folder_name)?;
+    install_novex_badge_mod(&cluster, &version.id, &mods_dir, &cwd).await;
     if let Some(arg) = crate::game::mods_folder_argument(
         cluster.mc_loader,
         loader_version_id,
@@ -1283,3 +1284,62 @@ mod jvm_arg_tests {
         assert_eq!(jvm_args_with(None, None), "");
     }
 }
+/// Installs the bundled NOVEX badge mod only where its current build is compatible.
+/// The mod remains inert unless the user accepted the privacy notice for badge lookups.
+async fn install_novex_badge_mod(
+    cluster: &Cluster,
+    minecraft_version: &str,
+    mods_dir: &Path,
+    game_dir: &Path,
+) {
+    let consent_file = game_dir.join("novex-badges-consent.json");
+    if oneclient_common::consent::declined() {
+        if let Err(err) = tokio::fs::remove_file(&consent_file).await {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(error = %err, "could not remove NOVEX badge consent marker");
+            }
+        }
+    } else if let Err(err) = tokio::fs::write(
+        &consent_file,
+        br#"{"enabled":true,"policy_version":2}"#,
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "could not write NOVEX badge consent marker");
+    }
+
+    if cluster.mc_loader != oneclient_common::domain::GameLoader::Fabric
+        || minecraft_version != "1.21.1"
+        || NOVEX_BADGE_MOD_JAR.is_empty()
+    {
+        return;
+    }
+
+    let destination = mods_dir.join("novex-badges-0.1.0+mc1.21.1.jar");
+    if polyio::try_exists(&destination).await.unwrap_or(false) {
+        // Never replace a user's existing file. Versioned names allow future
+        // NOVEX releases to install side-by-side without deleting custom mods.
+        return;
+    }
+
+    if let Err(err) = polyio::create_dir_all(mods_dir).await {
+        tracing::warn!(error = %err, "could not create the Fabric mods directory for NOVEX badges");
+        return;
+    }
+
+    let temporary = destination.with_extension("jar.tmp");
+    if let Err(err) = tokio::fs::write(&temporary, NOVEX_BADGE_MOD_JAR).await {
+        tracing::warn!(error = %err, "could not stage the NOVEX badge mod");
+        return;
+    }
+
+    if let Err(err) = tokio::fs::rename(&temporary, &destination).await {
+        let _ = tokio::fs::remove_file(&temporary).await;
+        if err.kind() != std::io::ErrorKind::AlreadyExists {
+            tracing::warn!(error = %err, "could not install the NOVEX badge mod");
+        }
+    } else {
+        tracing::info!(path = %destination.display(), "installed NOVEX badge mod for Fabric 1.21.1");
+    }
+}
+
