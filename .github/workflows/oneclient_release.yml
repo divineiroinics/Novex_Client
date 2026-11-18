@@ -302,6 +302,23 @@ jobs:
             cargo build --release --bin oneclient_app
           fi
 
+      - name: (Windows) Verify badge jars are embedded in the launcher
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          binary = Path("target/release/oneclient_app.exe").read_bytes()
+          for version in ("1.21.1", "1.21.4", "1.21.5", "1.21.8"):
+              jar_path = Path(f"packages/oneclient_core/novex-badges-{version}.jar")
+              jar = jar_path.read_bytes()
+              if not jar or jar not in binary:
+                  raise SystemExit(f"NOVEX badge jar for Minecraft {version} is missing from the launcher binary")
+              print(f"embedded badge jar verified: Minecraft {version} ({len(jar)} bytes)")
+          PY
+
       - name: (macOS) Verify deployment target
         if: matrix.macos_deployment_target != ''
         shell: bash
