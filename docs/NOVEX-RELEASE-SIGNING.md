@@ -5,7 +5,7 @@ NOVEX automatic updates use cargo-packager signatures. The public key is embedde
 ## One-time repository configuration
 
 1. On a trusted local machine, use the same pinned cargo-packager version as the release workflow (`0.11.8`) and run `cargo packager signer generate`.
-2. Save the generated private key and its password securely. Do not paste either into chat, an issue, a commit, or a workflow file.
+2. Save the generated private key and its password (if you set one) securely. Do not paste either into chat, an issue, a commit, or a workflow file.
 3. Add the private key as the repository Actions secret `CARGO_PACKAGER_SIGN_PRIVATE_KEY`.
 4. If the private key is password-protected, add its password as the repository Actions secret `CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD`. If you generated an unencrypted key, leave this secret unset; the release workflow passes an empty password to cargo-packager, which explicitly skips its interactive password prompt.
 5. Add the matching public key as the repository Actions variable `NOVEX_UPDATER_PUBKEY`.
