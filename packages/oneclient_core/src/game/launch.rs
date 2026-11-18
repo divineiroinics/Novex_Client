@@ -1308,14 +1308,34 @@ async fn install_novex_badge_mod(
         tracing::warn!(error = %err, "could not write NOVEX badge consent marker");
     }
 
-    if cluster.mc_loader != oneclient_common::domain::GameLoader::Fabric
-        || minecraft_version != "1.21.1"
-        || crate::NOVEX_BADGE_MOD_JAR.is_empty()
-    {
+    if cluster.mc_loader != oneclient_common::domain::GameLoader::Fabric {
         return;
     }
 
-    let destination = mods_dir.join("novex-badges-0.1.0+mc1.21.1.jar");
+    let (mod_bytes, file_name) = match minecraft_version {
+        "1.21.1" => (
+            crate::novex_badge_mods::MC_1_21_1,
+            "novex-badges-0.1.0+mc1.21.1.jar",
+        ),
+        "1.21.4" => (
+            crate::novex_badge_mods::MC_1_21_4,
+            "novex-badges-0.1.0+mc1.21.4.jar",
+        ),
+        "1.21.5" => (
+            crate::novex_badge_mods::MC_1_21_5,
+            "novex-badges-0.1.0+mc1.21.5.jar",
+        ),
+        "1.21.8" => (
+            crate::novex_badge_mods::MC_1_21_8,
+            "novex-badges-0.1.0+mc1.21.8.jar",
+        ),
+        _ => return,
+    };
+    if mod_bytes.is_empty() {
+        return;
+    }
+
+    let destination = mods_dir.join(file_name);
     if polyio::try_exists(&destination).await.unwrap_or(false) {
         // Never replace a user's existing file. Versioned names allow future
         // NOVEX releases to install side-by-side without deleting custom mods.
@@ -1328,7 +1348,7 @@ async fn install_novex_badge_mod(
     }
 
     let temporary = destination.with_extension("jar.tmp");
-    if let Err(err) = tokio::fs::write(&temporary, crate::NOVEX_BADGE_MOD_JAR).await {
+    if let Err(err) = tokio::fs::write(&temporary, mod_bytes).await {
         tracing::warn!(error = %err, "could not stage the NOVEX badge mod");
         return;
     }
@@ -1339,7 +1359,7 @@ async fn install_novex_badge_mod(
             tracing::warn!(error = %err, "could not install the NOVEX badge mod");
         }
     } else {
-        tracing::info!(path = %destination.display(), "installed NOVEX badge mod for Fabric 1.21.1");
+        tracing::info!(path = %destination.display(), "installed NOVEX badge mod for Fabric badge mod");
     }
 }
 
