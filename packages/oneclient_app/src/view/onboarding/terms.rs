@@ -120,7 +120,7 @@ impl Component for OnboardingTerms {
         let accept_next = next.clone();
         let nav = terms_nav(
             back,
-            !loading,
+            !loading && document.is_some(),
             move || {
                 accept_dispatch.accept_tos(terms_version, privacy_version);
                 let _ = RouterContext::get().replace(accept_next.clone());
