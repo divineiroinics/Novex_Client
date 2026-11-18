@@ -17,7 +17,14 @@ abstract class PlayerListEntryMixin {
         PlayerListEntry entry = (PlayerListEntry) (Object) this;
         Badge badge = BadgeCache.get(entry.getProfile().getId());
         if (badge != null) {
-            cir.setReturnValue(BadgeText.prepend(cir.getReturnValue(), badge));
+            // Vanilla returns null when the server has not supplied a custom
+            // display name. The tab list then falls back to the profile name,
+            // so build that fallback here before adding the badge.
+            Text original = cir.getReturnValue();
+            if (original == null) {
+                original = Text.literal(entry.getProfile().getName());
+            }
+            cir.setReturnValue(BadgeText.prepend(original, badge));
         }
     }
 }
