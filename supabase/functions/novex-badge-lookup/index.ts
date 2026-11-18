@@ -60,8 +60,18 @@ Deno.serve(async (req: Request) => {
   const forwarded = forwardedChain?.at(-1)?.trim();
   const clientAddress = req.headers.get("cf-connecting-ip") ||
     req.headers.get("x-real-ip") || forwarded || "unknown";
-  const addressBytes = new TextEncoder().encode(clientAddress);
-  const addressHash = await crypto.subtle.digest("SHA-256", addressBytes);
+  const hmacKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(serviceKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const addressHash = await crypto.subtle.sign(
+    "HMAC",
+    hmacKey,
+    new TextEncoder().encode(clientAddress),
+  );
   const keyHash = Array.from(new Uint8Array(addressHash))
     .map((byte) => byte.toString(16).padStart(2, "0")).join("");
   try {
