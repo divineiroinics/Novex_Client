@@ -1285,6 +1285,28 @@ mod jvm_arg_tests {
         assert_eq!(jvm_args_with(None, None), "");
     }
 }
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest.iter().copied() {
+        write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    encoded
+}
+
+#[cfg(test)]
+mod novex_badge_hash_tests {
+    use super::sha256_hex;
+
+    #[test]
+    fn sha256_hex_uses_lowercase_hexadecimal() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+}
+
 /// Installs the bundled NOVEX badge mod only where its current build is compatible.
 /// The mod remains inert unless the user accepted the privacy notice for badge lookups.
 async fn install_novex_badge_mod(
@@ -1351,11 +1373,11 @@ async fn install_novex_badge_mod(
 
     let destination = mods_dir.join(file_name);
     let managed_hash_file = mods_dir.join(".novex-badges-managed.sha256");
-    let expected_hash = format!("{:x}", Sha256::digest(mod_bytes));
+    let expected_hash = sha256_hex(mod_bytes);
 
     match tokio::fs::read(&destination).await {
         Ok(existing) => {
-            let existing_hash = format!("{:x}", Sha256::digest(&existing));
+            let existing_hash = sha256_hex(&existing);
             if existing_hash == expected_hash {
                 // Recover the sidecar if a previous install completed but its
                 // metadata write was interrupted.
