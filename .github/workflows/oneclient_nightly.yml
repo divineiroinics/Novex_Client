@@ -7,8 +7,10 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # New pushes supersede stale nightly builds so the latest NOVEX commit gets
+  # the Windows installer slot instead of waiting behind obsolete compiles.
   group: novex-nightly-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 # Nightlies are unsigned test builds, so they do not need the release profile's
 # whole-program optimization - and that optimization is exactly what makes them
