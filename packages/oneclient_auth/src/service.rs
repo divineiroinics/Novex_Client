@@ -168,7 +168,10 @@ impl AuthService {
         let account = result?;
         tracing::info!(username = %account.username, "Microsoft login succeeded");
 
-        if account.is_microsoft() {
+        if account.is_microsoft() && !oneclient_common::consent::declined() {
+            // Send the short-lived Minecraft Services token only after the user
+            // has accepted NOVEX's privacy terms. A declined user can still sign in;
+            // their profile simply remains unverified and receives no badge.
             // Send the short-lived Minecraft Services token only for a live
             // profile check. The NOVEX endpoint discards it after verification.
             let verification_request = self.net.http()
