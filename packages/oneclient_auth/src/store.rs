@@ -103,6 +103,13 @@ impl CredentialsStore {
 
         let account = offline_account(username);
         self.users.insert(account.id, account.clone());
+
+        // Match Microsoft account creation: the first profile becomes the
+        // default so a fresh offline install can proceed straight to launch.
+        if self.default_user.is_none() {
+            self.default_user = Some(account.id);
+        }
+
         Ok(account)
     }
 
