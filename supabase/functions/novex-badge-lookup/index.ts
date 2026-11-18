@@ -49,6 +49,42 @@ Deno.serve(async (req: Request) => {
     minecraft_access_token?: unknown;
   };
 
+  const action = input?.action === "verify" ? "verify" : "lookup";
+  // Supabase's edge proxy supplies the client address. Hash it before sending
+  // it to the database; the raw address is never persisted.
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const clientAddress = forwarded || req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-real-ip") || "unknown";
+  const addressBytes = new TextEncoder().encode(clientAddress);
+  const addressHash = await crypto.subtle.digest("SHA-256", addressBytes);
+  const keyHash = Array.from(new Uint8Array(addressHash))
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  try {
+    const limitResponse = await fetch(`${projectUrl}/rest/v1/rpc/novex_consume_badge_rate_limit`, {
+      method: "POST",
+      headers: {
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        p_key_hash: keyHash,
+        p_action: action,
+        p_limit: action === "verify" ? 5 : 120,
+        p_window_seconds: action === "verify" ? 3600 : 60,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!limitResponse.ok) return reply({ error: "rate_limit_unavailable" }, 503);
+    const allowed = await limitResponse.json();
+    if (allowed !== true) {
+      return reply({ error: "rate_limit_exceeded" }, 429, "no-store");
+    }
+  } catch {
+    // Fail closed: a database outage must not turn off the protection.
+    return reply({ error: "rate_limit_unavailable" }, 503);
+  }
+
   const projectUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!projectUrl || !serviceKey) return reply({ error: "service_unavailable" }, 503);
