@@ -185,7 +185,8 @@ jobs:
               "-Pminecraft_version=$mc" \
               "-Pyarn_mappings=$yarn" \
               "-Ploader_version=$loader"
-            install -D "novex-badge-mod/build/libs/novex-badges-0.1.0.jar" \
+            mkdir -p packages/oneclient_core
+            cp "novex-badge-mod/build/libs/novex-badges-0.1.0.jar" \
               "packages/oneclient_core/novex-badges-$mc.jar"
           }
           build_badge "1.21.1" "1.21.1+build.3" "0.16.10"
