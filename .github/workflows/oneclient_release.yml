@@ -197,7 +197,9 @@ jobs:
         run: |
           set -euo pipefail
           missing=()
-          for name in NOVEX_UPDATER_PUBKEY CARGO_PACKAGER_SIGN_PRIVATE_KEY CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD; do
+          # The password is optional: cargo-packager accepts an empty string to
+          # explicitly skip its interactive password prompt in CI.
+          for name in NOVEX_UPDATER_PUBKEY CARGO_PACKAGER_SIGN_PRIVATE_KEY; do
             if [ -z "${!name:-}" ]; then missing+=("$name"); fi
           done
           if [ "${#missing[@]}" -gt 0 ]; then
