@@ -49,6 +49,10 @@ Deno.serve(async (req: Request) => {
     minecraft_access_token?: unknown;
   };
 
+  const projectUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!projectUrl || !serviceKey) return reply({ error: "service_unavailable" }, 503);
+
   const action = input?.action === "verify" ? "verify" : "lookup";
   // Supabase's edge proxy supplies the client address. Hash it before sending
   // it to the database; the raw address is never persisted.
@@ -84,10 +88,6 @@ Deno.serve(async (req: Request) => {
     // Fail closed: a database outage must not turn off the protection.
     return reply({ error: "rate_limit_unavailable" }, 503);
   }
-
-  const projectUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!projectUrl || !serviceKey) return reply({ error: "service_unavailable" }, 503);
 
   if (input?.action === "verify") {
     const token = input.minecraft_access_token;
