@@ -51,7 +51,22 @@ def find_crt_dir() -> Path:
     if not dirs:
         sys.exit(f"error: vswhere found no DLLs matching {CRT_GLOB}")
 
-    newest = sorted(dirs, key=lambda p: p.parts)[-1]
+    def redist_version(path: Path) -> tuple[int, ...]:
+        # The directory is nested below a version such as 14.50.35717.
+        # Sorting full paths lexicographically misorders versions (for example,
+        # 14.9 can sort after 14.50), potentially bundling an older CRT.
+        for part in path.parts:
+            if re.fullmatch(r"\d+(?:\.\d+){2,}", part):
+                return tuple(int(component) for component in part.split("."))
+        return ()
+
+    versions = {path: redist_version(path) for path in dirs}
+    if any(not version for version in versions.values()):
+        missing = [str(path) for path, version in versions.items() if not version]
+        sys.exit("error: could not parse a Visual C++ redist version from: " + ", ".join(missing))
+
+    newest = max(dirs, key=lambda path: (versions[path], str(path).casefold()))
+    print(f"CRT redist version: {'.'.join(map(str, versions[newest]))}")
     print(f"CRT redist dir: {newest}")
     return newest
 
