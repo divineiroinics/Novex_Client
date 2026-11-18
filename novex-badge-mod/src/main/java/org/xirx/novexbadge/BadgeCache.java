@@ -11,11 +11,14 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class BadgeCache {
     private static final String LOOKUP_URL =
             "https://epsqlgboxuwbfedqhuax.supabase.co/functions/v1/novex-badge-lookup";
     private static final long CACHE_MILLIS = 90_000L;
+    private static final int CLEANUP_EVERY = 128;
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3))
             .build();
@@ -24,24 +27,40 @@ public final class BadgeCache {
 
     private static final ConcurrentHashMap<UUID, CachedBadge> CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, Long> LAST_REQUEST = new ConcurrentHashMap<>();
+    private static final AtomicInteger LOOKUP_COUNT = new AtomicInteger();
 
     private BadgeCache() {}
 
     public static Badge get(UUID playerId) {
         long now = System.currentTimeMillis();
         CachedBadge cached = CACHE.get(playerId);
-        if (cached != null && cached.expiresAt() > now) {
-            return cached.badge();
+        if (cached != null) {
+            if (cached.expiresAt() > now) return cached.badge();
+            CACHE.remove(playerId, cached);
         }
 
-        Long last = LAST_REQUEST.get(playerId);
-        if (last == null || now - last > CACHE_MILLIS) {
-            if (LAST_REQUEST.putIfAbsent(playerId, now) == null ||
-                    now - LAST_REQUEST.getOrDefault(playerId, now) > CACHE_MILLIS) {
-                LAST_REQUEST.put(playerId, now);
-                lookup(playerId);
+        // compute() makes the per-player cooldown atomic. The previous
+        // putIfAbsent/get sequence could race and issue duplicate requests
+        // when several name render calls arrived in the same frame.
+        AtomicBoolean shouldLookup = new AtomicBoolean(false);
+        LAST_REQUEST.compute(playerId, (id, last) -> {
+            if (last == null || now - last >= CACHE_MILLIS) {
+                shouldLookup.set(true);
+                return now;
             }
+            return last;
+        });
+
+        if (shouldLookup.get()) lookup(playerId);
+
+        // Keep UUIDs for players who have left servers from accumulating
+        // forever in long-running client sessions.
+        if (LOOKUP_COUNT.incrementAndGet() % CLEANUP_EVERY == 0) {
+            long cutoff = now - (CACHE_MILLIS * 2);
+            CACHE.entrySet().removeIf(entry -> entry.getValue().expiresAt() <= now);
+            LAST_REQUEST.entrySet().removeIf(entry -> entry.getValue() < cutoff);
         }
+
         return null;
     }
 
