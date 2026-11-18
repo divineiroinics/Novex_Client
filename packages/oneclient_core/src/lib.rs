@@ -1,5 +1,10 @@
 #![recursion_limit = "256"]
 
+// Populated by build.rs on supported CI builds. Empty on developer builds
+// that do not have the separately-built Fabric badge jar staged.
+pub(crate) const NOVEX_BADGE_MOD_JAR: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.1.jar"));
+
 #[cfg(debug_assertions)]
 pub mod dev;
 
