@@ -256,6 +256,7 @@ jobs:
         shell: bash
         env:
           CI: true
+          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: |
