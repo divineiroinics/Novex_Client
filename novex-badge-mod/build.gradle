@@ -50,7 +50,7 @@ processResources {
     dependsOn tasks.named("extractNovexBadge")
     inputs.property "version", project.version
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": project.version, "minecraft_version": project.minecraft_version, "loader_version": project.loader_version
     }
 }
 
