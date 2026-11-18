@@ -4,6 +4,8 @@ name: NOVEX Nightly (Unsigned)
 on:
   push:
     branches: [main, novex/rebrand]
+  pull_request:
+    branches: [novex/rebrand]
   workflow_dispatch:
 
 concurrency:
@@ -36,22 +38,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-            os_key: darwin
-            arch: aarch64
-            formats: app,dmg
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            os_key: darwin
-            arch: x86_64
-            formats: app,dmg
-            macos_deployment_target: '10.14'
-          - platform: ubuntu-22.04
-            target: ''
-            os_key: linux
-            arch: x86_64
-            formats: deb,appimage
           - platform: windows-latest
             target: ''
             os_key: windows
