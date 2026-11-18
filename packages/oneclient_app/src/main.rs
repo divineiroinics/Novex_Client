@@ -68,6 +68,7 @@ impl App for NovexClientApp {
                             startup.start_cloud_sync();
                             Actions::check_sessions();
                             microsoft_java::spawn_auto_install();
+                            oneclient_app::updater::spawn_update_check(false, rescue_bus);
                         }
                         Err(err) => {
                             events::report_startup_failure(&station, &err);
