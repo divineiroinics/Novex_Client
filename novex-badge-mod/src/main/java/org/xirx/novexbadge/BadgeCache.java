@@ -9,6 +9,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import net.fabricmc.loader.api.FabricLoader;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -19,6 +23,9 @@ public final class BadgeCache {
             "https://epsqlgboxuwbfedqhuax.supabase.co/functions/v1/novex-badge-lookup";
     private static final long CACHE_MILLIS = 90_000L;
     private static final int CLEANUP_EVERY = 128;
+    // No network lookup occurs unless the launcher wrote an explicit consent
+    // marker after the user accepted the NOVEX privacy notice.
+    private static final boolean CONSENTED = readConsent();
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3))
             .build();
@@ -62,6 +69,19 @@ public final class BadgeCache {
         }
 
         return null;
+    }
+
+
+    private static boolean readConsent() {
+        try {
+            Path marker = FabricLoader.getInstance().getGameDir().resolve("novex-badges-consent.json");
+            if (!Files.isRegularFile(marker)) return false;
+            JsonObject value = JsonParser.parseString(Files.readString(marker)).getAsJsonObject();
+            return value.has("enabled") && value.get("enabled").getAsBoolean()
+                    && value.has("policy_version") && value.get("policy_version").getAsInt() >= 2;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static void lookup(UUID playerId) {
