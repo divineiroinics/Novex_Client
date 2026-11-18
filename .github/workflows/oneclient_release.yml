@@ -146,6 +146,12 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
+      - name: Apply NOVEX branding to every UI string and app icon
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python scripts/apply-novex-branding.py
+
       - name: Build the bundled NOVEX badge mod
         uses: actions/setup-java@v4
         with:
