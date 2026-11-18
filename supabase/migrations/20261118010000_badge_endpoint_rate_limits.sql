@@ -19,7 +19,7 @@ create or replace function public.novex_consume_badge_rate_limit(
 )
 returns boolean
 language plpgsql
-security definer
+security invoker
 set search_path = pg_catalog
 as $$
 declare
