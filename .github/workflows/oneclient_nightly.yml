@@ -92,19 +92,18 @@ jobs:
         run: |
           set -euo pipefail
           build_badge() {
-            mc="$1"; yarn="$2"; loader="$3"; api="$4"
+            mc="$1"; yarn="$2"; loader="$3"
             gradle --no-daemon -p novex-badge-mod clean build \
               "-Pminecraft_version=$mc" \
               "-Pyarn_mappings=$yarn" \
-              "-Ploader_version=$loader" \
-              "-Pfabric_api_version=$api"
+              "-Ploader_version=$loader"
             install -D "novex-badge-mod/build/libs/novex-badges-0.1.0.jar" \
               "packages/oneclient_core/novex-badges-$mc.jar"
           }
-          build_badge "1.21.1" "1.21.1+build.3" "0.16.10" "0.116.18+1.21.1"
-          build_badge "1.21.4" "1.21.4+build.8" "0.16.10" "0.119.4+1.21.4"
-          build_badge "1.21.5" "1.21.5+build.1" "0.16.14" "0.128.2+1.21.5"
-          build_badge "1.21.8" "1.21.8+build.1" "0.17.3" "0.136.1+1.21.8"
+          build_badge "1.21.1" "1.21.1+build.3" "0.16.10"
+          build_badge "1.21.4" "1.21.4+build.8" "0.16.10"
+          build_badge "1.21.5" "1.21.5+build.1" "0.16.14"
+          build_badge "1.21.8" "1.21.8+build.1" "0.17.3"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
