@@ -2,13 +2,15 @@
 
 Client-side badge renderer for verified NOVEX Minecraft identities.
 
-## Current target
+## Current build targets
 
-- Minecraft Java 1.21.1
-- Fabric Loader 0.16+
+- Minecraft Java 1.21.1 — Fabric Loader 0.16.10
+- Minecraft Java 1.21.4 — Fabric Loader 0.16.10
+- Minecraft Java 1.21.5 — Fabric Loader 0.16.14
+- Minecraft Java 1.21.8 — Fabric Loader 0.17.3
 - Java 21
 
-This first build target is intentionally explicit. It is **not yet compatible with every Minecraft version supported by OneClient**; each additional game version needs its own compile and runtime validation.
+Each Minecraft version is compiled against its matching Yarn mappings and has its own jar. This is not a claim of compatibility with every version supported by the launcher; more versions must pass the same build and runtime checks before being added.
 
 ## Behavior
 
@@ -30,6 +32,8 @@ gradle build
 
 The jar is written to `build/libs/`.
 
-## Important integration status
+## Launcher integration and privacy
 
-This is still a standalone mod project. The launcher now submits Microsoft-authenticated Minecraft profiles for server-side verification, but it does not yet bundle or auto-install this jar into Fabric instances. Plus entitlement administration, exact NOVEX emblem glyph/texture, additional Minecraft-version builds, rate limiting/abuse monitoring, and end-to-end multiplayer tests remain follow-up work. Do not advertise the badge system as production-ready until those are complete.
+The Windows nightly build compiles the four supported jars into NOVEX. On launch, the launcher installs the matching jar for supported Fabric versions without overwriting an existing file. The mod does not make badge requests unless the launcher has written a local consent marker after the user accepts the updated privacy notice. Declining the notice removes that marker.
+
+The mod uses Fabric Loader and Minecraft classes only; it does not require Fabric API. Plus entitlement administration and end-to-end multiplayer/runtime testing still need completion. Do not advertise badges as fully verified until those tests pass.
