@@ -78,7 +78,7 @@ impl Component for OnboardingTerms {
         // Only the returned UUID/username are stored; the token is discarded.
         let privacy_body = document.as_ref().map(|doc| {
             format!(
-                "{}\n\n## NOVEX identity and badge verification\n\nWhen you sign in with a Microsoft account, NOVEX may send your short-lived Minecraft Services access token over HTTPS to NOVEX's verification server to confirm your Minecraft profile. The token is used only for the official Minecraft profile request and is not stored in NOVEX's database. NOVEX stores the verified Minecraft UUID, current username, and verification timestamp so other NOVEX clients can display your badge. Offline/cracked profiles cannot be verified this way. You can continue using the launcher if badge verification is unavailable.\n",
+                "{}\n\n## NOVEX identity and badge verification\n\nWhen you sign in with a Microsoft account after accepting this privacy notice, NOVEX sends your short-lived Minecraft Services access token over HTTPS to NOVEX's verification server to confirm your Minecraft profile. The token is used only for the official Minecraft profile request and is not stored in NOVEX's database or application logs. NOVEX stores the verified Minecraft UUID, current username, and verification timestamp so other NOVEX clients can display your badge. If you decline the privacy notice, this verification request is skipped and your profile will not receive a verified badge. Offline/cracked profiles cannot be verified this way. You can continue using the launcher if badge verification is unavailable.\n",
                 doc.privacy_body().unwrap_or("")
             )
         });
