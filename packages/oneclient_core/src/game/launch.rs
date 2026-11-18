@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use interfrost::api::minecraft::ArgumentType;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
+use sha2::{Digest, Sha256};
 
 use crate::ClusterStage;
 use crate::LauncherResult;
@@ -1297,6 +1298,14 @@ async fn install_novex_badge_mod(
         if let Err(err) = tokio::fs::remove_file(&consent_file).await {
             if err.kind() != std::io::ErrorKind::NotFound {
                 tracing::warn!(error = %err, "could not remove NOVEX badge consent marker");
+                if let Err(write_err) = tokio::fs::write(
+                    &consent_file,
+                    br#"{"enabled":false,"policy_version":2}"#,
+                )
+                .await
+                {
+                    tracing::error!(error = %write_err, "could not disable NOVEX badge consent marker");
+                }
             }
         }
     } else if let Err(err) = tokio::fs::write(
@@ -1335,16 +1344,41 @@ async fn install_novex_badge_mod(
         return;
     }
 
-    let destination = mods_dir.join(file_name);
-    if polyio::try_exists(&destination).await.unwrap_or(false) {
-        // Never replace a user's existing file. Versioned names allow future
-        // NOVEX releases to install side-by-side without deleting custom mods.
+    if let Err(err) = tokio::fs::create_dir_all(mods_dir).await {
+        tracing::warn!(error = %err, "could not create the Fabric mods directory for NOVEX badges");
         return;
     }
 
-    if let Err(err) = polyio::create_dir_all(mods_dir).await {
-        tracing::warn!(error = %err, "could not create the Fabric mods directory for NOVEX badges");
-        return;
+    let destination = mods_dir.join(file_name);
+    let managed_hash_file = mods_dir.join(".novex-badges-managed.sha256");
+    let expected_hash = format!("{:x}", Sha256::digest(mod_bytes));
+
+    match tokio::fs::read(&destination).await {
+        Ok(existing) => {
+            let existing_hash = format!("{:x}", Sha256::digest(&existing));
+            if existing_hash == expected_hash {
+                // Recover the sidecar if a previous install completed but its
+                // metadata write was interrupted.
+                let _ = tokio::fs::write(&managed_hash_file, &expected_hash).await;
+                return;
+            }
+
+            let previously_managed = tokio::fs::read_to_string(&managed_hash_file)
+                .await
+                .is_ok_and(|hash| hash.trim() == existing_hash);
+            if !previously_managed {
+                tracing::warn!(
+                    path = %destination.display(),
+                    "existing NOVEX badge filename was modified or is user-managed; preserving it"
+                );
+                return;
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => {
+            tracing::warn!(path = %destination.display(), error = %err, "could not inspect existing NOVEX badge mod");
+            return;
+        }
     }
 
     let temporary = destination.with_extension("jar.tmp");
@@ -1353,13 +1387,21 @@ async fn install_novex_badge_mod(
         return;
     }
 
+    if polyio::try_exists(&destination).await.unwrap_or(false) {
+        if let Err(err) = tokio::fs::remove_file(&destination).await {
+            let _ = tokio::fs::remove_file(&temporary).await;
+            tracing::warn!(error = %err, "could not replace the previously managed NOVEX badge mod");
+            return;
+        }
+    }
+
     if let Err(err) = tokio::fs::rename(&temporary, &destination).await {
         let _ = tokio::fs::remove_file(&temporary).await;
-        if err.kind() != std::io::ErrorKind::AlreadyExists {
-            tracing::warn!(error = %err, "could not install the NOVEX badge mod");
-        }
+        tracing::warn!(error = %err, "could not install the NOVEX badge mod");
+    } else if let Err(err) = tokio::fs::write(&managed_hash_file, &expected_hash).await {
+        tracing::warn!(error = %err, "installed NOVEX badge mod but could not record its managed hash");
     } else {
-        tracing::info!(path = %destination.display(), "installed NOVEX badge mod for Fabric badge mod");
+        tracing::info!(path = %destination.display(), "installed or updated NOVEX badge mod");
     }
 }
 
