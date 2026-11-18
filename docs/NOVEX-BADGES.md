@@ -46,6 +46,6 @@ The verification response returns the UUID and username confirmed by Minecraft S
 
 ## Current implementation boundaries
 
-The Fabric mod currently targets Minecraft 1.21.1 only. It includes the NOVEX emblem texture and adds badge markers to entity display names and player-list entries, subject to runtime mixin verification. The launcher does not yet install it automatically. A trusted Plus purchase/admin workflow, additional Minecraft-version builds, per-client/server rate limiting and abuse monitoring, and end-to-end multiplayer tests remain open. The privacy notice describes the verification request, and verification is skipped when the user declines it.
+The Fabric mod currently targets Minecraft 1.21.1 only. The Windows nightly build compiles it into the launcher, which installs it into Fabric 1.21.1 instances at launch without replacing an existing file. Badge lookups are inert unless the launcher has written a local consent marker after the user accepts the updated privacy notice; declining removes that marker. The mod adds badge markers to entity display names and player-list entries, but live in-game mixin behavior still requires multiplayer testing. A trusted Plus purchase/admin workflow, additional Minecraft-version builds, and end-to-end multiplayer tests remain open. The Edge Function applies server-side per-address rate limits; production monitoring and abuse response still need configuration.
 
 Do not present the feature as generally available until launcher installation and all supported-version tests pass.
