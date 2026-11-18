@@ -39,6 +39,10 @@ public final class BadgeCache {
     private BadgeCache() {}
 
     public static Badge get(UUID playerId) {
+        // The consent marker is written by the launcher before Minecraft starts.
+        // Never perform a badge lookup when the player has not opted in.
+        if (!CONSENTED) return null;
+
         long now = System.currentTimeMillis();
         CachedBadge cached = CACHE.get(playerId);
         if (cached != null) {
