@@ -174,7 +174,9 @@ impl AuthService {
             // their profile simply remains unverified and receives no badge.
             // Send the short-lived Minecraft Services token only for a live
             // profile check. The NOVEX endpoint discards it after verification.
-            let verification_request = self.net.http()
+            let verification_request = self
+                .net
+                .http()
                 .post("https://epsqlgboxuwbfedqhuax.supabase.co/functions/v1/novex-badge-lookup")
                 .json(&serde_json::json!({
                     "action": "verify",

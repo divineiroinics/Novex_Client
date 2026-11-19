@@ -11,7 +11,10 @@ fn version_key(version: &str) -> (Vec<u32>, String) {
     let parts = prefix
         .split('.')
         .filter(|part| !part.is_empty())
-        .map(|part| part.parse().expect("badge jar version prefix must be numeric"))
+        .map(|part| {
+            part.parse()
+                .expect("badge jar version prefix must be numeric")
+        })
         .collect();
     (parts, version.to_string())
 }
@@ -37,12 +40,11 @@ fn is_supported_version_token(version: &str) -> bool {
     let mut segments = version.split('-');
     let numeric = segments.next().unwrap_or_default();
     !numeric.is_empty()
-        && numeric.split('.').all(|part| {
-            !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-        })
-        && segments.all(|part| {
-            !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        })
+        && numeric
+            .split('.')
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        && segments
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric()))
 }
 
 fn main() {

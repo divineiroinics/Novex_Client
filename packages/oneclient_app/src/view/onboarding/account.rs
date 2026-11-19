@@ -24,7 +24,9 @@ impl Component for OnboardingAccount {
         let offline_pending = offline.read().state().is_loading();
         let offline_error = match &*offline.read().state() {
             MutationStateData::Settled { res: Err(err), .. }
-            | MutationStateData::Loading { res: Some(Err(err)) } => Some(err.to_string()),
+            | MutationStateData::Loading {
+                res: Some(Err(err)),
+            } => Some(err.to_string()),
             _ => None,
         };
         let offline_username = use_state(|| String::new());
