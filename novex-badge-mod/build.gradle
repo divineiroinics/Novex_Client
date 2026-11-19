@@ -3,7 +3,8 @@ plugins {
     id "net.fabricmc.fabric-loom" version "1.19-SNAPSHOT" apply false
 }
 
-def modernMinecraft = project.minecraft_version.startsWith("26.")
+def weeklySnapshot = project.minecraft_version.matches("[0-9]{2}w[0-9]{2}[a-z]")
+def modernMinecraft = project.minecraft_version.matches("[0-9]{2,}\\..*") || (weeklySnapshot && Integer.parseInt(project.minecraft_version.substring(0, 2)) >= 26)
 if (modernMinecraft) {
     apply plugin: "net.fabricmc.fabric-loom"
 } else {

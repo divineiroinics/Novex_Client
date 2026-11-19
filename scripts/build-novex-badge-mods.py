@@ -2,6 +2,7 @@
 """Build NOVEX badge jars for every Fabric version in the launcher's catalog."""
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import shutil
@@ -17,6 +18,10 @@ STAGE_DIR = ROOT / "packages" / "oneclient_core"
 CATALOG_URL = "https://data-v2.polyfrost.org/oneclient/versions/metadata.json"
 FABRIC_META = "https://meta.fabricmc.net/v2/versions"
 USER_AGENT = "NOVEX-Client-Badge-Build/1.0"
+PREVIEW_VERSION_RE = re.compile(
+    r"^(?:1\.\d+(?:\.\d+)?|\d{2,}\.\d+(?:\.\d+)?)-(?:snapshot-\d+|pre-?\d+|rc-?\d+)$"
+)
+WEEKLY_VERSION_RE = re.compile(r"^\d{2}w\d{2}[a-z]$")
 
 
 def fetch_json(url: str):
@@ -63,6 +68,47 @@ def catalog_versions() -> list[str]:
     return sorted(versions, key=key)
 
 
+def is_modern_namespace(version: str) -> bool:
+    match = re.match(r"^(\d+)\.", version)
+    if match and int(match.group(1)) >= 26:
+        return True
+    return bool(
+        WEEKLY_VERSION_RE.fullmatch(version)
+        and int(version[:2]) >= 26
+    )
+
+
+def preview_versions() -> list[str]:
+    """Return the newest Fabric preview for each supported namespace family.
+
+    Keep previews out of signed releases. Nightly builds may include them when
+    Fabric publishes mappings and the current badge source still compiles.
+    """
+    entries = fetch_json(f"{FABRIC_META}/game")
+    selected: list[str] = []
+    legacy_selected = False
+    modern_selected = False
+    for item in entries:
+        version = str(item.get("version", ""))
+        if item.get("stable") is not False or not PREVIEW_VERSION_RE.fullmatch(version):
+            continue
+        if version.startswith("1.") and not legacy_selected:
+            selected.append(version)
+            legacy_selected = True
+        elif is_modern_namespace(version) and not modern_selected:
+            selected.append(version)
+            modern_selected = True
+        if legacy_selected and modern_selected:
+            break
+
+    for item in entries:
+        version = str(item.get("version", ""))
+        if item.get("stable") is False and WEEKLY_VERSION_RE.fullmatch(version):
+            selected.append(version)
+            break
+    return selected
+
+
 def latest_yarn(version: str) -> str:
     entries = fetch_json(f"{FABRIC_META}/yarn/{version}")
     stable = next((item for item in entries if item.get("stable")), None)
@@ -82,67 +128,115 @@ def latest_loader(version: str) -> str:
 
 
 def java_release(version: str) -> int:
-    parts = tuple(int(part) for part in version.split("."))
+    if WEEKLY_VERSION_RE.fullmatch(version):
+        year = int(version[:2])
+        return 25 if year >= 26 else (21 if year >= 24 else 17)
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", version)
+    if not match:
+        raise ValueError(f"Unsupported Minecraft version format: {version}")
+    major, minor, patch = (int(part or 0) for part in match.groups())
     # Minecraft 26.x requires Java 25; 1.20.5+ requires Java 21;
     # earlier supported 1.x releases run on Java 17.
-    if parts[0] >= 26:
+    if major >= 26:
         return 25
-    if parts[0] == 1 and (parts[1], parts[2] if len(parts) > 2 else 0) >= (20, 5):
+    if major == 1 and (minor, patch) >= (20, 5):
         return 21
     return 17
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--include-previews",
+        action="store_true",
+        help="best-effort build the newest Fabric snapshot/RC/pre-release for 1.x and 26.x",
+    )
+    args = parser.parse_args()
+
     versions = catalog_versions()
     if not versions:
         raise RuntimeError(f"No supported Fabric Minecraft versions were found in {CATALOG_URL}")
+
+    previews: list[str] = []
+    if args.include_previews:
+        try:
+            previews = preview_versions()
+        except (
+            urllib.error.URLError,
+            json.JSONDecodeError,
+            KeyError,
+            ValueError,
+            RuntimeError,
+        ) as error:
+            print(f"::warning::Could not discover Fabric preview versions; stable builds will continue: {error}")
+
+    previews = [version for version in previews if version not in versions]
+    all_versions = versions + previews
+    preview_set = set(previews)
 
     STAGE_DIR.mkdir(parents=True, exist_ok=True)
     for stale in STAGE_DIR.glob("novex-badges-*.jar"):
         stale.unlink()
 
     built: list[str] = []
-    for version in versions:
-        modern = version.startswith("26.")
-        yarn = None if modern else latest_yarn(version)
-        loader = latest_loader(version)
-        release = java_release(version)
-        mapping_mode = "official" if modern else "yarn"
-        mixin_package = (
-            "org.xirx.novexbadge.modern.mixin"
-            if modern else "org.xirx.novexbadge.mixin"
-        )
-        mixin_compatibility = "JAVA_25" if modern else f"JAVA_{release}"
-        print(
-            f"\n=== Building NOVEX Badges for Minecraft {version} "
-            f"({mapping_mode} mappings, Fabric Loader {loader}, Java release {release}) ===",
-            flush=True,
-        )
-        command = [
-            "gradle", "--no-daemon", "-p", str(MOD_DIR), "clean", "build",
-            f"-Pminecraft_version={version}",
-            f"-Pmapping_mode={mapping_mode}",
-            f"-Ploader_version={loader}",
-            f"-Pjava_release={release}",
-            f"-Pmixin_package={mixin_package}",
-            f"-Pmixin_compatibility={mixin_compatibility}",
-        ]
-        if yarn:
-            command.append(f"-Pyarn_mappings={yarn}")
-        subprocess.run(command, cwd=ROOT, check=True)
+    skipped_previews: list[str] = []
+    for version in all_versions:
+        is_preview = version in preview_set
+        try:
+            modern = is_modern_namespace(version)
+            yarn = None if modern else latest_yarn(version)
+            loader = latest_loader(version)
+            release = java_release(version)
+            mapping_mode = "official" if modern else "yarn"
+            mixin_package = (
+                "org.xirx.novexbadge.modern.mixin"
+                if modern else "org.xirx.novexbadge.mixin"
+            )
+            mixin_compatibility = "JAVA_25" if modern else f"JAVA_{release}"
+            print(
+                f"\n=== Building NOVEX Badges for Minecraft {version} "
+                f"({mapping_mode} mappings, Fabric Loader {loader}, Java release {release}) ===",
+                flush=True,
+            )
+            command = [
+                "gradle", "--no-daemon", "-p", str(MOD_DIR), "clean", "build",
+                f"-Pminecraft_version={version}",
+                f"-Pmapping_mode={mapping_mode}",
+                f"-Ploader_version={loader}",
+                f"-Pjava_release={release}",
+                f"-Pmixin_package={mixin_package}",
+                f"-Pmixin_compatibility={mixin_compatibility}",
+            ]
+            if yarn:
+                command.append(f"-Pyarn_mappings={yarn}")
+            subprocess.run(command, cwd=ROOT, check=True)
 
-        built_jar = MOD_DIR / "build" / "libs" / "novex-badges-0.1.0.jar"
-        if not built_jar.is_file() or built_jar.stat().st_size == 0:
-            raise RuntimeError(f"Gradle did not produce a non-empty badge jar for Minecraft {version}")
-        staged = STAGE_DIR / f"novex-badges-{version}.jar"
-        shutil.copy2(built_jar, staged)
-        built.append(version)
-        print(f"Staged {staged.relative_to(ROOT)} ({staged.stat().st_size} bytes)", flush=True)
+            built_jar = MOD_DIR / "build" / "libs" / "novex-badges-0.1.0.jar"
+            if not built_jar.is_file() or built_jar.stat().st_size == 0:
+                raise RuntimeError(f"Gradle did not produce a non-empty badge jar for Minecraft {version}")
+            staged = STAGE_DIR / f"novex-badges-{version}.jar"
+            shutil.copy2(built_jar, staged)
+            built.append(version)
+            print(f"Staged {staged.relative_to(ROOT)} ({staged.stat().st_size} bytes)", flush=True)
+        except (
+            urllib.error.URLError,
+            json.JSONDecodeError,
+            KeyError,
+            ValueError,
+            RuntimeError,
+            subprocess.CalledProcessError,
+        ) as error:
+            if not is_preview:
+                raise
+            skipped_previews.append(version)
+            print(f"::warning::Skipping preview {version}; current badge sources are not compatible yet: {error}")
 
     (STAGE_DIR / "novex-badge-versions.txt").write_text(
         "\n".join(built) + "\n", encoding="utf-8"
     )
     print(f"\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
+    if skipped_previews:
+        print("Preview variants not built: " + ", ".join(skipped_previews))
     return 0
 
 

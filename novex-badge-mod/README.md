@@ -4,12 +4,12 @@ Client-side badge renderer for verified NOVEX Minecraft identities.
 
 ## Current build targets
 
-The launcher build script discovers every Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. The current catalog includes these game-version families:
+The launcher build script discovers every stable Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. Windows nightlies additionally attempt the newest Fabric preview in each source family (1.x and 26+), plus the current modern weekly snapshot; previews are embedded only when mappings are available and compilation succeeds. Failed previews are skipped without failing the stable build, and signed releases remain stable-only. The current catalog includes these game-version families:
 
 - Minecraft 1.18 through 1.21.11 (Yarn mappings; Java 17 or 21 according to the game version)
-- Minecraft 26.x (Mojang's unobfuscated mappings; Java 25)
+- Minecraft 26+ (Mojang's unobfuscated mappings; Java 25)
 
-Minecraft versions before 1.18 and non-Fabric loaders are not included. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
+Minecraft versions before 1.18, older weekly snapshot identifiers, and non-Fabric loaders are not included; the latest current weekly snapshot is attempted in nightlies only. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
 
 ## Behavior
 
@@ -27,6 +27,8 @@ From the repository root, use Java 25, Gradle 9.8.0, and Python 3.9 or newer:
 
 ```sh
 python scripts/build-novex-badge-mods.py
+# Optional best-effort preview builds (used by Windows nightlies):
+python scripts/build-novex-badge-mods.py --include-previews
 ```
 
 The script reads NOVEX's version catalog, resolves the matching Yarn/Fabric Loader versions (or the modern Mojang-mapped toolchain), builds every supported variant, and stages the jars in `packages/oneclient_core/`. The launcher build then embeds the staged jars automatically.
