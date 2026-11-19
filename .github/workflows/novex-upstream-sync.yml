@@ -1,4 +1,5 @@
-name: NOVEX upstream sync # canonical-logo-validation-and-updater-key
+name: NOVEX upstream sync
+
 on:
   workflow_dispatch:
   schedule:
@@ -7,20 +8,27 @@ on:
     branches: [novex/rebrand]
     paths:
       - .github/workflows/novex-upstream-sync.yml
+
 permissions:
   contents: write
+  pull-requests: write
+  actions: write
+
 concurrency:
   group: novex-upstream-sync
   cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out NOVEX
+        uses: actions/checkout@v4
         with:
           ref: novex/rebrand
           fetch-depth: 0
-      - name: Merge latest OneLauncher upstream
+
+      - name: Fetch and merge latest OneLauncher
         shell: bash
         run: |
           set -euo pipefail
@@ -29,73 +37,69 @@ jobs:
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
           if ! git merge-base --is-ancestor upstream/main HEAD; then
-            # Never silently retain stale NOVEX-side code on an upstream conflict.
+            # No -X ours/theirs: conflicts must be reviewed, never silently discarded.
             if ! git merge --no-edit --no-ff upstream/main; then
               git merge --abort || true
-              echo "::error::Upstream changes conflict with NOVEX customizations. Resolve the conflict on novex/rebrand, then rerun this workflow."
+              echo "::error::OneLauncher changes conflict with NOVEX. No NOVEX branch was modified; resolve the conflict in a review branch and rerun."
               exit 1
             fi
+          else
+            echo "NOVEX already contains the latest OneLauncher main commit."
           fi
-      - name: Reapply canonical NOVEX branding
+
+      - name: Reapply NOVEX branding and updater identity
         run: |
           python -m pip install --disable-pip-version-check Pillow
           python scripts/apply-novex-branding.py
-      - name: Format upstream Rust changes
-        run: cargo fmt --all
-      - name: Validate branding and workspace metadata
+
+      - name: Format and validate
+        shell: bash
         run: |
           set -euo pipefail
+          cargo fmt --all
           test -s branding/novex-mark.png
           test -s packages/oneclient_app/icons/icon.ico
           test -s packages/oneclient_app/icons/icon.icns
           test -s packages/oneclient_app/icons/OneClient.icon/Assets/novex-mark.svg
           grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
+          grep -q 'identifier = "org.xirx.NOVEXClient"' packages/oneclient_app/Cargo.toml
           grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
           grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
           grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
           test "$(grep -c '^pub const UPDATER_ENDPOINT:' packages/oneclient_app/src/constants.rs)" -eq 1
           test "$(grep -c '^pub const UPDATER_PUBKEY:' packages/oneclient_app/src/constants.rs)" -eq 1
           grep -q 'option_env!("NOVEX_UPDATER_PUBKEY")' packages/oneclient_app/src/constants.rs
-          ! grep -q 'UPDATER_PUBKEY: &str = "option_env!' packages/oneclient_app/src/constants.rs
           grep -q 'ProductName", "NOVEX Client"' packages/oneclient_app/build.rs
           grep -q 'NOVEX Client v' packages/oneclient_common/src/constants.rs
-          grep -q 'UPDATER_ENDPOINT' packages/oneclient_app/src/constants.rs
-          grep -q 'UPDATER_PUBKEY' packages/oneclient_app/src/constants.rs
-      - name: Commit branding overlay and push verified upstream sync
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "NOVEX Sync Bot"
-          git config user.email "novex-sync-bot@users.noreply.github.com"
-          # Commit the overlay before merging a concurrently generated asset
-          # commit. Merging while the working tree is dirty makes Git abort.
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: reapply NOVEX branding after upstream sync"
-          fi
-          for attempt in 1 2 3; do
-            git fetch origin novex/rebrand
-            if ! git merge-base --is-ancestor origin/novex/rebrand HEAD; then
-              if ! git merge --no-edit origin/novex/rebrand; then
-                git merge --abort || true
-                echo "::error::The NOVEX branch moved with conflicting changes during sync. Retry after reviewing the branch."
-                exit 1
-              fi
-              python scripts/apply-novex-branding.py
-              cargo fmt --all
-              test "$(grep -c '^pub const UPDATER_ENDPOINT:' packages/oneclient_app/src/constants.rs)" -eq 1
-              test "$(grep -c '^pub const UPDATER_PUBKEY:' packages/oneclient_app/src/constants.rs)" -eq 1
-              grep -q 'product-name = "NOVEX Client"' packages/oneclient_app/Cargo.toml
-              grep -q 'publisher = "XIRX"' packages/oneclient_app/Cargo.toml
-            fi
-            git add -A
-            if ! git diff --cached --quiet; then
-              git commit -m "chore: reapply NOVEX branding after upstream sync"
-            fi
-            if git push origin HEAD:refs/heads/novex/rebrand; then
-              exit 0
-            fi
-            echo "Branch moved during push attempt $attempt; retrying against the latest branch."
-          done
-          echo "::error::Could not push the upstream sync after three retries."
-          exit 1
+          cargo metadata --no-deps --format-version 1 > /tmp/novex-cargo-metadata.json
+
+      - name: Create upstream update pull request
+        id: upstream_pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.NOVEX_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+          base: novex/rebrand
+          branch: novex/upstream-sync-proposal
+          delete-branch: false
+          title: "Sync latest OneLauncher updates into NOVEX"
+          body: |
+            Automated upstream sync proposal.
+
+            - Imports the latest Polyfrost/OneLauncher main changes.
+            - Reapplies the canonical NOVEX branding, package identity, icons, and updater endpoint/key configuration.
+            - Leaves conflicts unresolved for human review; it never uses a blanket ours/theirs conflict strategy.
+            - This PR must pass the normal NOVEX build and validation checks before merging.
+
+            The installed NOVEX application is not updated by this workflow directly. This workflow proposes source changes; a successful NOVEX release is still required to distribute them.
+          commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
+          author: "NOVEX Sync Bot <novex-sync-bot@users.noreply.github.com>"
+          committer: "NOVEX Sync Bot <novex-sync-bot@users.noreply.github.com>"
+
+      # PRs created with GITHUB_TOKEN do not trigger pull_request workflows.
+      # workflow_dispatch is an allowed GITHUB_TOKEN-triggered event, so run
+      # the same Windows nightly build explicitly against the proposal branch.
+      - name: Dispatch Windows validation for the upstream proposal
+        if: steps.upstream_pr.outputs.pull-request-operation == 'created' || steps.upstream_pr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run novex-proposal-validation.yml --ref novex/upstream-sync-proposal
