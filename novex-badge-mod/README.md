@@ -26,7 +26,9 @@ The database lookup only returns identities verified by Minecraft Services. When
 From the repository root, use Java 25, Gradle 9.8.0, and Python 3.9 or newer:
 
 ```sh
-python scripts/build-novex-badge-mods.py\n# Optional best-effort preview builds (used by Windows nightlies):\npython scripts/build-novex-badge-mods.py --include-previews
+python scripts/build-novex-badge-mods.py
+# Optional best-effort preview builds (used by Windows nightlies):
+python scripts/build-novex-badge-mods.py --include-previews
 ```
 
 The script reads NOVEX's version catalog, resolves the matching Yarn/Fabric Loader versions (or the modern Mojang-mapped toolchain), builds every supported variant, and stages the jars in `packages/oneclient_core/`. The launcher build then embeds the staged jars automatically.
