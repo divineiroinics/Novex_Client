@@ -19,17 +19,17 @@ abstract class PlayerListEntryMixin {
         Component original = cir.getReturnValue();
         // Vanilla falls back to the profile name when no custom tab name exists.
         if (original == null) {
-            original = Component.literal(entry.getProfile().getName());
+            original = Component.literal(ProfileAccess.name(entry.getProfile()));
         }
 
         Minecraft client = Minecraft.getInstance();
         if (client.player != null
-                && client.player.getUUID().equals(entry.getProfile().getId())) {
+                && client.player.getUUID().equals(ProfileAccess.id(entry.getProfile()))) {
             cir.setReturnValue(BadgeText.prependNovexLogo(original));
             return;
         }
 
-        Badge badge = BadgeCache.get(entry.getProfile().getId());
+        Badge badge = BadgeCache.get(ProfileAccess.id(entry.getProfile()));
         if (badge != null) {
             cir.setReturnValue(BadgeText.prepend(original, badge));
         }
