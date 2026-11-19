@@ -28,7 +28,7 @@ def fetch_json(url: str):
 def catalog_versions() -> list[str]:
     catalog = fetch_json(CATALOG_URL)
     versions: set[str] = set()
-    unsupported_major_versions: set[str] = set()
+    unsupported_versions: set[str] = set()
     for cluster in catalog.get("clusters", []):
         major = int(cluster["major_version"])
         for entry in cluster.get("entries", []):
@@ -40,17 +40,17 @@ def catalog_versions() -> list[str]:
             version = f"{base}.{int(patch)}" if patch is not None else base
             if not re.fullmatch(r"(?:1|[2-9][0-9]*)\.\d+(?:\.\d+)?", version):
                 continue
-            if major >= 26:
-                unsupported_major_versions.add(version)
+            numeric = tuple(int(part) for part in version.split("."))
+            if major >= 26 or (major == 1 and numeric[1] < 18):
+                unsupported_versions.add(version)
             else:
                 versions.add(version)
 
-    if unsupported_major_versions:
-        raise RuntimeError(
-            "The launcher catalog includes Minecraft 26.x Fabric targets "
-            f"({', '.join(sorted(unsupported_major_versions))}). Those versions use "
-            "the new unobfuscated Minecraft namespace and need a separate source port; "
-            "the legacy Yarn-based badge mod cannot safely be reused."
+    if unsupported_versions:
+        print(
+            "Not built by the legacy Yarn source set (requires a separate compatibility port): "
+            + ", ".join(sorted(unsupported_versions)),
+            flush=True,
         )
 
     def key(value: str):
