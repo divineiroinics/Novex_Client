@@ -38,17 +38,17 @@ def catalog_versions() -> list[str]:
             patch = entry.get("patch_version")
             base = f"{major}.{minor}" if major >= 26 else f"1.{major}.{minor}"
             version = f"{base}.{int(patch)}" if patch is not None else base
-            if not re.fullmatch(r"(?:1|[2-9][0-9]*)\.\d+(?:\.\d+)?", version):
+            if not re.fullmatch(r"(?:1|[2-9][0-9]*)\\.\\d+(?:\\.\\d+)?", version):
                 continue
             numeric = tuple(int(part) for part in version.split("."))
-            if major >= 26 or (major == 1 and numeric[1] < 18):
+            if major == 1 and numeric[1] < 18:
                 unsupported_versions.add(version)
             else:
                 versions.add(version)
 
     if unsupported_versions:
         print(
-            "Not built by the legacy Yarn source set (requires a separate compatibility port): "
+            "Skipped because the current badge source requires Minecraft 1.18+: "
             + ", ".join(sorted(unsupported_versions)),
             flush=True,
         )
@@ -79,7 +79,10 @@ def latest_loader(version: str) -> str:
 
 def java_release(version: str) -> int:
     parts = tuple(int(part) for part in version.split("."))
-    # Minecraft 1.20.5+ requires Java 21; earlier releases run on Java 17.
+    # Minecraft 26.x requires Java 25; 1.20.5+ requires Java 21;
+    # earlier supported 1.x releases run on Java 17.
+    if parts[0] >= 26:
+        return 25
     if parts[0] == 1 and (parts[1], parts[2] if len(parts) > 2 else 0) >= (20, 5):
         return 21
     return 17
@@ -88,7 +91,7 @@ def java_release(version: str) -> int:
 def main() -> int:
     versions = catalog_versions()
     if not versions:
-        raise RuntimeError(f"No legacy Fabric Minecraft versions were found in {CATALOG_URL}")
+        raise RuntimeError(f"No supported Fabric Minecraft versions were found in {CATALOG_URL}")
 
     STAGE_DIR.mkdir(parents=True, exist_ok=True)
     for stale in STAGE_DIR.glob("novex-badges-*.jar"):
@@ -96,22 +99,32 @@ def main() -> int:
 
     built: list[str] = []
     for version in versions:
-        yarn = latest_yarn(version)
+        modern = version.startswith("26.")
+        yarn = None if modern else latest_yarn(version)
         loader = latest_loader(version)
         release = java_release(version)
+        mapping_mode = "official" if modern else "yarn"
+        mixin_package = (
+            "org.xirx.novexbadge.modern.mixin"
+            if modern else "org.xirx.novexbadge.mixin"
+        )
         print(
-            f"\n=== Building NOVEX Badges for Minecraft {version} "
-            f"(Yarn {yarn}, Fabric Loader {loader}, Java release {release}) ===",
+            f"\\n=== Building NOVEX Badges for Minecraft {version} "
+            f"({mapping_mode} mappings, Fabric Loader {loader}, Java release {release}) ===",
             flush=True,
         )
         command = [
             "gradle", "--no-daemon", "-p", str(MOD_DIR), "clean", "build",
             f"-Pminecraft_version={version}",
-            f"-Pyarn_mappings={yarn}",
+            f"-Pmapping_mode={mapping_mode}",
             f"-Ploader_version={loader}",
             f"-Pjava_release={release}",
+            f"-Pmixin_package={mixin_package}",
         ]
+        if yarn:
+            command.append(f"-Pyarn_mappings={yarn}")
         subprocess.run(command, cwd=ROOT, check=True)
+
         built_jar = MOD_DIR / "build" / "libs" / "novex-badges-0.1.0.jar"
         if not built_jar.is_file() or built_jar.stat().st_size == 0:
             raise RuntimeError(f"Gradle did not produce a non-empty badge jar for Minecraft {version}")
@@ -121,9 +134,9 @@ def main() -> int:
         print(f"Staged {staged.relative_to(ROOT)} ({staged.stat().st_size} bytes)", flush=True)
 
     (STAGE_DIR / "novex-badge-versions.txt").write_text(
-        "\n".join(built) + "\n", encoding="utf-8"
+        "\\n".join(built) + "\\n", encoding="utf-8"
     )
-    print(f"\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
+    print(f"\\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
     return 0
 
 
