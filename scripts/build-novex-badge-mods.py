@@ -65,7 +65,7 @@ def latest_yarn(version: str) -> str:
     selected = stable or (entries[0] if entries else None)
     if not selected:
         raise RuntimeError(f"No Yarn mappings published for Minecraft {version}")
-    return selected.get("maven") or selected.get("version")
+    return selected.get("version") or selected.get("maven", "").split(":")[-1]
 
 
 def latest_loader(version: str) -> str:
