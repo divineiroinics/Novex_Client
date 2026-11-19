@@ -6,7 +6,6 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.lang.reflect.InvocationTargetException;
 
 public final class BadgeText {
     private static final Identifier BADGE_FONT = createBadgeFont();
