@@ -53,6 +53,10 @@ def catalog_versions() -> list[str]:
             flush=True,
         )
 
+    # Preserve the four Minecraft versions already shipped by NOVEX even if
+    # the remote catalog later removes them from its curated quick-pick list.
+    versions.update({"1.21.1", "1.21.4", "1.21.5", "1.21.8"})
+
     def key(value: str):
         return tuple(int(part) for part in value.split("."))
 
