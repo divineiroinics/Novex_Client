@@ -68,7 +68,7 @@ jobs:
 
       - name: Build and stage every catalog Fabric badge mod
         shell: bash
-        run: python3 scripts/build-novex-badge-mods.py
+        run: python3 scripts/build-novex-badge-mods.py --include-previews
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
