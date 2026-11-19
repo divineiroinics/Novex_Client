@@ -19,7 +19,7 @@ CATALOG_URL = "https://data-v2.polyfrost.org/oneclient/versions/metadata.json"
 FABRIC_META = "https://meta.fabricmc.net/v2/versions"
 USER_AGENT = "NOVEX-Client-Badge-Build/1.0"
 PREVIEW_VERSION_RE = re.compile(
-    r"^(?:1\\.\\d+(?:\\.\\d+)?|26\\.\\d+(?:\\.\\d+)?)-(?:snapshot-\\d+|pre-?\\d+|rc-?\\d+)$"
+    r"^(?:1\.\d+(?:\.\d+)?|26\.\d+(?:\.\d+)?)-(?:snapshot-\d+|pre-?\d+|rc-?\d+)$"
 )
 
 
@@ -107,7 +107,7 @@ def latest_loader(version: str) -> str:
 
 
 def java_release(version: str) -> int:
-    match = re.match(r"^(\\d+)\\.(\\d+)(?:\\.(\\d+))?", version)
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", version)
     if not match:
         raise ValueError(f"Unsupported Minecraft version format: {version}")
     major, minor, patch = (int(part or 0) for part in match.groups())
@@ -118,6 +118,7 @@ def java_release(version: str) -> int:
     if major == 1 and (minor, patch) >= (20, 5):
         return 21
     return 17
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -169,7 +170,7 @@ def main() -> int:
             )
             mixin_compatibility = "JAVA_25" if modern else f"JAVA_{release}"
             print(
-                f"\\n=== Building NOVEX Badges for Minecraft {version} "
+                f"\n=== Building NOVEX Badges for Minecraft {version} "
                 f"({mapping_mode} mappings, Fabric Loader {loader}, Java release {release}) ===",
                 flush=True,
             )
@@ -207,12 +208,13 @@ def main() -> int:
             print(f"::warning::Skipping preview {version}; current badge sources are not compatible yet: {error}")
 
     (STAGE_DIR / "novex-badge-versions.txt").write_text(
-        "\\n".join(built) + "\\n", encoding="utf-8"
+        "\n".join(built) + "\n", encoding="utf-8"
     )
-    print(f"\\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
+    print(f"\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
     if skipped_previews:
         print("Preview variants not built: " + ", ".join(skipped_previews))
     return 0
+
 
 if __name__ == "__main__":
     try:
