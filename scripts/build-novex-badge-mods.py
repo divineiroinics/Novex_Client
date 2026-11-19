@@ -114,7 +114,8 @@ def latest_loader(version: str) -> str:
 
 def java_release(version: str) -> int:
     if WEEKLY_VERSION_RE.fullmatch(version):
-        return 25
+        year = int(version[:2])
+        return 25 if year >= 26 else (21 if year >= 24 else 17)
     match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", version)
     if not match:
         raise ValueError(f"Unsupported Minecraft version format: {version}")
@@ -167,7 +168,7 @@ def main() -> int:
     for version in all_versions:
         is_preview = version in preview_set
         try:
-            modern = version.startswith("26.") or bool(WEEKLY_VERSION_RE.fullmatch(version))
+            modern = version.startswith("26.") or (bool(WEEKLY_VERSION_RE.fullmatch(version)) and int(version[:2]) >= 26)
             yarn = None if modern else latest_yarn(version)
             loader = latest_loader(version)
             release = java_release(version)
