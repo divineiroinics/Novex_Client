@@ -21,6 +21,7 @@ USER_AGENT = "NOVEX-Client-Badge-Build/1.0"
 PREVIEW_VERSION_RE = re.compile(
     r"^(?:1\.\d+(?:\.\d+)?|26\.\d+(?:\.\d+)?)-(?:snapshot-\d+|pre-?\d+|rc-?\d+)$"
 )
+WEEKLY_VERSION_RE = re.compile(r"^\d{2}w\d{2}[a-z]$")
 
 
 def fetch_json(url: str):
@@ -85,6 +86,11 @@ def preview_versions() -> list[str]:
             ):
                 selected.append(version)
                 break
+    for item in entries:
+        version = str(item.get("version", ""))
+        if item.get("stable") is False and WEEKLY_VERSION_RE.fullmatch(version):
+            selected.append(version)
+            break
     return selected
 
 
@@ -107,6 +113,8 @@ def latest_loader(version: str) -> str:
 
 
 def java_release(version: str) -> int:
+    if WEEKLY_VERSION_RE.fullmatch(version):
+        return 25
     match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", version)
     if not match:
         raise ValueError(f"Unsupported Minecraft version format: {version}")
@@ -159,7 +167,7 @@ def main() -> int:
     for version in all_versions:
         is_preview = version in preview_set
         try:
-            modern = version.startswith("26.")
+            modern = version.startswith("26.") or bool(WEEKLY_VERSION_RE.fullmatch(version))
             yarn = None if modern else latest_yarn(version)
             loader = latest_loader(version)
             release = java_release(version)
