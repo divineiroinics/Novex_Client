@@ -6,6 +6,7 @@ import net.minecraft.network.chat.Component;
 import java.util.UUID;
 import org.xirx.novexbadge.Badge;
 import org.xirx.novexbadge.BadgeCache;
+import org.xirx.novexbadge.ProfileAccess;
 import org.xirx.novexbadge.modern.BadgeText;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
