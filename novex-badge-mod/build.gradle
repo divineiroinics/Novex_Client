@@ -1,5 +1,13 @@
 plugins {
-    id "fabric-loom" version "1.19-SNAPSHOT"
+    id "net.fabricmc.fabric-loom-remap" version "1.19-SNAPSHOT" apply false
+    id "net.fabricmc.fabric-loom" version "1.19-SNAPSHOT" apply false
+}
+
+def modernMinecraft = project.minecraft_version.startsWith("26.")
+if (modernMinecraft) {
+    apply plugin: "net.fabricmc.fabric-loom"
+} else {
+    apply plugin: "net.fabricmc.fabric-loom-remap"
 }
 
 version = project.mod_version
@@ -13,13 +21,9 @@ repositories {
     mavenCentral()
 }
 
-def modernMinecraft = project.minecraft_version.startsWith("26.")
-
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    if (project.mapping_mode == "official") {
-        mappings loom.officialMojangMappings()
-    } else {
+    if (project.mapping_mode == "yarn") {
         mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     }
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
