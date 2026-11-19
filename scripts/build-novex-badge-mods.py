@@ -38,7 +38,7 @@ def catalog_versions() -> list[str]:
             patch = entry.get("patch_version")
             base = f"{major}.{minor}" if major >= 26 else f"1.{major}.{minor}"
             version = f"{base}.{int(patch)}" if patch is not None else base
-            if not re.fullmatch(r"(?:1|[2-9][0-9]*)\\.\\d+(?:\\.\\d+)?", version):
+            if not re.fullmatch(r"(?:1|[2-9][0-9]*)\.\\d+(?:\.\\d+)?", version):
                 continue
             numeric = tuple(int(part) for part in version.split("."))
             if major == 1 and numeric[1] < 18:
@@ -109,7 +109,7 @@ def main() -> int:
             if modern else "org.xirx.novexbadge.mixin"
         )
         print(
-            f"\\n=== Building NOVEX Badges for Minecraft {version} "
+            f"\n=== Building NOVEX Badges for Minecraft {version} "
             f"({mapping_mode} mappings, Fabric Loader {loader}, Java release {release}) ===",
             flush=True,
         )
@@ -134,9 +134,9 @@ def main() -> int:
         print(f"Staged {staged.relative_to(ROOT)} ({staged.stat().st_size} bytes)", flush=True)
 
     (STAGE_DIR / "novex-badge-versions.txt").write_text(
-        "\\n".join(built) + "\\n", encoding="utf-8"
+        "\n".join(built) + "\n", encoding="utf-8"
     )
-    print(f"\\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
+    print(f"\nBuilt {len(built)} Fabric badge mod variants: {', '.join(built)}")
     return 0
 
 
