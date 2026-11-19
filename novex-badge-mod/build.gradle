@@ -27,6 +27,8 @@ dependencies {
 
 if (modernMinecraft) {
     sourceSets.main.java.srcDir("src/modern/java")
+    sourceSets.main.java.exclude("org/xirx/novexbadge/BadgeText.java")
+    sourceSets.main.java.exclude("org/xirx/novexbadge/mixin/**")
 }
 
 def badgeSvg = file("../packages/oneclient_app/icons/OneClient.icon/Assets/novex-mark.svg")
@@ -58,14 +60,19 @@ tasks.configureEach {
 processResources {
     dependsOn tasks.named("extractNovexBadge")
     inputs.property "version", project.version
+    def mixinProperties = [
+        "mixin_package": project.mixin_package,
+        "entity_mixin": project.entity_mixin,
+        "player_list_mixin": project.player_list_mixin
+    ]
     filesMatching("fabric.mod.json") {
         expand "version": project.version,
                 "minecraft_version": project.minecraft_version,
                 "loader_version": project.loader_version,
-                "java_release": project.java_release,
-                "mixin_package": project.mixin_package,
-                "entity_mixin": project.entity_mixin,
-                "player_list_mixin": project.player_list_mixin
+                "java_release": project.java_release
+    }
+    filesMatching("novex_badges.client.mixins.json") {
+        expand mixinProperties
     }
 }
 
