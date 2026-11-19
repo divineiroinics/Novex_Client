@@ -4,14 +4,29 @@ use std::path::PathBuf;
 
 fn version_key(version: &str) -> (Vec<u32>, String) {
     let numeric = version.split('-').next().unwrap_or(version);
-    let parts = numeric
+    let prefix: String = numeric
+        .chars()
+        .take_while(|character| character.is_ascii_digit() || *character == '.')
+        .collect();
+    let parts = prefix
         .split('.')
+        .filter(|part| !part.is_empty())
         .map(|part| part.parse().expect("badge jar version prefix must be numeric"))
         .collect();
     (parts, version.to_string())
 }
 
 fn is_supported_version_token(version: &str) -> bool {
+    let bytes = version.as_bytes();
+    if bytes.len() == 6
+        && bytes[0..2].iter().all(u8::is_ascii_digit)
+        && bytes[2] == b'w'
+        && bytes[3..5].iter().all(u8::is_ascii_digit)
+        && bytes[5].is_ascii_lowercase()
+    {
+        return true;
+    }
+
     if !version
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-')
