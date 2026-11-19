@@ -63,7 +63,8 @@ processResources {
     def mixinProperties = [
         "mixin_package": project.mixin_package,
         "entity_mixin": project.entity_mixin,
-        "player_list_mixin": project.player_list_mixin
+        "player_list_mixin": project.player_list_mixin,
+        "mixin_compatibility": project.mixin_compatibility
     ]
     filesMatching("fabric.mod.json") {
         expand "version": project.version,
