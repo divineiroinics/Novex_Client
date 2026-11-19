@@ -101,4 +101,4 @@ jobs:
       - name: Dispatch Windows validation for the upstream proposal
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run oneclient_nightly.yml --ref novex/upstream-sync-proposal
+        run: gh workflow run novex-proposal-validation.yml --ref novex/upstream-sync-proposal
