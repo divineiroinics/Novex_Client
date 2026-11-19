@@ -4,12 +4,12 @@ Client-side badge renderer for verified NOVEX Minecraft identities.
 
 ## Current build targets
 
-The launcher build script discovers every Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. Current supported ranges are:
+The launcher build script discovers every Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. The current catalog includes these game-version families:
 
 - Minecraft 1.18 through 1.21.11 (Yarn mappings; Java 17 or 21 according to the game version)
 - Minecraft 26.x (Mojang's unobfuscated mappings; Java 25)
 
-Minecraft versions before 1.18 and non-Fabric loaders are not included. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The list is discovered from the catalog at build time rather than maintained as a hardcoded matrix.
+Minecraft versions before 1.18 and non-Fabric loaders are not included. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
 
 ## Behavior
 
