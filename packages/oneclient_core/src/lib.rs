@@ -1,16 +1,9 @@
 #![recursion_limit = "256"]
 
-// Populated by build.rs on supported CI builds. Empty on developer builds
-// that do not have the separately-built Fabric badge jars staged.
+// Populated by build.rs from every Fabric badge jar staged by CI.
+// Developer builds remain valid without Java/Gradle and simply embed no badge jars.
 pub(crate) mod novex_badge_mods {
-    pub const MC_1_21_1: &[u8] =
-        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.1.jar"));
-    pub const MC_1_21_4: &[u8] =
-        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.4.jar"));
-    pub const MC_1_21_5: &[u8] =
-        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.5.jar"));
-    pub const MC_1_21_8: &[u8] =
-        include_bytes!(concat!(env!("OUT_DIR"), "/novex-badges-1.21.8.jar"));
+    include!(concat!(env!("OUT_DIR"), "/novex_badge_mods.rs"));
 }
 
 #[cfg(debug_assertions)]
