@@ -6,6 +6,7 @@ import net.minecraft.text.Text;
 import org.xirx.novexbadge.Badge;
 import org.xirx.novexbadge.BadgeCache;
 import org.xirx.novexbadge.BadgeText;
+import org.xirx.novexbadge.ProfileAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,17 +21,17 @@ abstract class PlayerListEntryMixin {
         // Vanilla returns null when the server has not supplied a custom
         // display name, so use the profile name as the fallback.
         if (original == null) {
-            original = Text.literal(entry.getProfile().getName());
+            original = Text.literal(ProfileAccess.name(entry.getProfile()));
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null
-                && client.player.getUuid().equals(entry.getProfile().getId())) {
+                && client.player.getUuid().equals(ProfileAccess.id(entry.getProfile()))) {
             cir.setReturnValue(BadgeText.prependNovexLogo(original));
             return;
         }
 
-        Badge badge = BadgeCache.get(entry.getProfile().getId());
+        Badge badge = BadgeCache.get(ProfileAccess.id(entry.getProfile()));
         if (badge != null) {
             cir.setReturnValue(BadgeText.prepend(original, badge));
         }
