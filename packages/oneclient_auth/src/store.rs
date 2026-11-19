@@ -222,7 +222,6 @@ pub(crate) fn is_transient_auth_error(err: &AuthError) -> bool {
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

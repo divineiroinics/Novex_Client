@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use interfrost::api::minecraft::ArgumentType;
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use sha2::{Digest, Sha256};
 
 use crate::ClusterStage;
 use crate::LauncherResult;
@@ -1320,21 +1320,16 @@ async fn install_novex_badge_mod(
         if let Err(err) = tokio::fs::remove_file(&consent_file).await {
             if err.kind() != std::io::ErrorKind::NotFound {
                 tracing::warn!(error = %err, "could not remove NOVEX badge consent marker");
-                if let Err(write_err) = tokio::fs::write(
-                    &consent_file,
-                    br#"{"enabled":false,"policy_version":2}"#,
-                )
-                .await
+                if let Err(write_err) =
+                    tokio::fs::write(&consent_file, br#"{"enabled":false,"policy_version":2}"#)
+                        .await
                 {
                     tracing::error!(error = %write_err, "could not disable NOVEX badge consent marker");
                 }
             }
         }
-    } else if let Err(err) = tokio::fs::write(
-        &consent_file,
-        br#"{"enabled":true,"policy_version":2}"#,
-    )
-    .await
+    } else if let Err(err) =
+        tokio::fs::write(&consent_file, br#"{"enabled":true,"policy_version":2}"#).await
     {
         tracing::warn!(error = %err, "could not write NOVEX badge consent marker");
     }
@@ -1414,4 +1409,3 @@ async fn install_novex_badge_mod(
         tracing::info!(path = %destination.display(), "installed or updated NOVEX badge mod");
     }
 }
-
