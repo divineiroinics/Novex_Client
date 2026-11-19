@@ -3,6 +3,7 @@ package org.xirx.novexbadge.modern.mixin;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
+import java.util.UUID;
 import org.xirx.novexbadge.Badge;
 import org.xirx.novexbadge.BadgeCache;
 import org.xirx.novexbadge.modern.BadgeText;
@@ -22,14 +23,16 @@ abstract class PlayerListEntryMixin {
             original = Component.literal(ProfileAccess.name(entry.getProfile()));
         }
 
+        UUID profileId = ProfileAccess.id(entry.getProfile());
+        if (profileId == null) return;
+
         Minecraft client = Minecraft.getInstance();
-        if (client.player != null
-                && client.player.getUUID().equals(ProfileAccess.id(entry.getProfile()))) {
+        if (client.player != null && client.player.getUUID().equals(profileId)) {
             cir.setReturnValue(BadgeText.prependNovexLogo(original));
             return;
         }
 
-        Badge badge = BadgeCache.get(ProfileAccess.id(entry.getProfile()));
+        Badge badge = BadgeCache.get(profileId);
         if (badge != null) {
             cir.setReturnValue(BadgeText.prepend(original, badge));
         }
