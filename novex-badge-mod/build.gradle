@@ -1,5 +1,13 @@
 plugins {
-    id "fabric-loom" version "1.8.13"
+    id "net.fabricmc.fabric-loom-remap" version "1.19-SNAPSHOT" apply false
+    id "net.fabricmc.fabric-loom" version "1.19-SNAPSHOT" apply false
+}
+
+def modernMinecraft = project.minecraft_version.startsWith("26.")
+if (modernMinecraft) {
+    apply plugin: "net.fabricmc.fabric-loom"
+} else {
+    apply plugin: "net.fabricmc.fabric-loom-remap"
 }
 
 version = project.mod_version
@@ -15,8 +23,19 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    if (project.mapping_mode == "yarn") {
+        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    } else {
+        // The non-remapping Loom plugin uses ordinary Gradle configurations.
+        implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    }
+}
+
+if (modernMinecraft) {
+    sourceSets.main.java.srcDir("src/modern/java")
+    sourceSets.main.java.exclude("org/xirx/novexbadge/BadgeText.java")
+    sourceSets.main.java.exclude("org/xirx/novexbadge/mixin/**")
 }
 
 def badgeSvg = file("../packages/oneclient_app/icons/OneClient.icon/Assets/novex-mark.svg")
@@ -48,18 +67,30 @@ tasks.configureEach {
 processResources {
     dependsOn tasks.named("extractNovexBadge")
     inputs.property "version", project.version
+    def mixinProperties = [
+        "mixin_package": project.mixin_package,
+        "entity_mixin": project.entity_mixin,
+        "player_list_mixin": project.player_list_mixin,
+        "mixin_compatibility": project.mixin_compatibility
+    ]
     filesMatching("fabric.mod.json") {
-        expand "version": project.version, "minecraft_version": project.minecraft_version, "loader_version": project.loader_version
+        expand "version": project.version,
+                "minecraft_version": project.minecraft_version,
+                "loader_version": project.loader_version,
+                "java_release": project.java_release
+    }
+    filesMatching("novex_badges.client.mixins.json") {
+        expand mixinProperties
     }
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
     withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = Integer.parseInt(project.java_release.toString())
 }

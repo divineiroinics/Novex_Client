@@ -4,13 +4,12 @@ Client-side badge renderer for verified NOVEX Minecraft identities.
 
 ## Current build targets
 
-- Minecraft Java 1.21.1 — Fabric Loader 0.16.10
-- Minecraft Java 1.21.4 — Fabric Loader 0.16.10
-- Minecraft Java 1.21.5 — Fabric Loader 0.16.14
-- Minecraft Java 1.21.8 — Fabric Loader 0.17.3
-- Java 21
+The launcher build script discovers every Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. The current catalog includes these game-version families:
 
-Each Minecraft version is compiled against its matching Yarn mappings and has its own jar. This is not a claim of compatibility with every version supported by the launcher; more versions must pass the same build and runtime checks before being added.
+- Minecraft 1.18 through 1.21.11 (Yarn mappings; Java 17 or 21 according to the game version)
+- Minecraft 26.x (Mojang's unobfuscated mappings; Java 25)
+
+Minecraft versions before 1.18 and non-Fabric loaders are not included. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
 
 ## Behavior
 
@@ -24,16 +23,16 @@ The database lookup only returns identities verified by Minecraft Services. When
 
 ## Build
 
-Run from this directory with Gradle 8.10.2 and Java 21:
+From the repository root, use Java 25, Gradle 9.8.0, and Python 3.9 or newer:
 
 ```sh
-gradle build
+python scripts/build-novex-badge-mods.py
 ```
 
-The jar is written to `build/libs/`.
+The script reads NOVEX's version catalog, resolves the matching Yarn/Fabric Loader versions (or the modern Mojang-mapped toolchain), builds every supported variant, and stages the jars in `packages/oneclient_core/`. The launcher build then embeds the staged jars automatically.
 
 ## Launcher integration and privacy
 
-The Windows nightly build compiles the four supported jars into NOVEX. On launch, the launcher installs the matching jar for supported Fabric versions without overwriting an existing file. The mod does not make badge requests unless the launcher has written a local consent marker after the user accepts the updated privacy notice. Declining the notice removes that marker.
+The Windows nightly and release builds compile and embed every catalog-supported Fabric jar into NOVEX. On launch, the launcher installs the matching jar for the active Fabric Minecraft version without overwriting an existing file. The mod does not make badge requests unless the launcher has written a local consent marker after the user accepts the updated privacy notice. Declining the notice removes that marker.
 
 The mod uses Fabric Loader and Minecraft classes only; it does not require Fabric API. Plus entitlement administration and end-to-end multiplayer/runtime testing still need completion. Do not advertise badges as fully verified until those tests pass.

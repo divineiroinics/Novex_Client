@@ -1343,28 +1343,16 @@ async fn install_novex_badge_mod(
         return;
     }
 
-    let (mod_bytes, file_name) = match minecraft_version {
-        "1.21.1" => (
-            crate::novex_badge_mods::MC_1_21_1,
-            "novex-badges-0.1.0+mc1.21.1.jar",
-        ),
-        "1.21.4" => (
-            crate::novex_badge_mods::MC_1_21_4,
-            "novex-badges-0.1.0+mc1.21.4.jar",
-        ),
-        "1.21.5" => (
-            crate::novex_badge_mods::MC_1_21_5,
-            "novex-badges-0.1.0+mc1.21.5.jar",
-        ),
-        "1.21.8" => (
-            crate::novex_badge_mods::MC_1_21_8,
-            "novex-badges-0.1.0+mc1.21.8.jar",
-        ),
-        _ => return,
+    let Some((_, mod_bytes)) = crate::novex_badge_mods::MODS
+        .iter()
+        .find(|(version, _)| *version == minecraft_version)
+    else {
+        return;
     };
     if mod_bytes.is_empty() {
         return;
     }
+    let file_name = format!("novex-badges-0.1.0+mc{minecraft_version}.jar");
 
     if let Err(err) = tokio::fs::create_dir_all(mods_dir).await {
         tracing::warn!(error = %err, "could not create the Fabric mods directory for NOVEX badges");
