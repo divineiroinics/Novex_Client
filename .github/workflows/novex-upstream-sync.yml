@@ -99,6 +99,7 @@ jobs:
       # workflow_dispatch is an allowed GITHUB_TOKEN-triggered event, so run
       # the same Windows nightly build explicitly against the proposal branch.
       - name: Dispatch Windows validation for the upstream proposal
+        if: steps.upstream_pr.outputs.pull-request-operation == 'created' || steps.upstream_pr.outputs.pull-request-operation == 'updated'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run novex-proposal-validation.yml --ref novex/upstream-sync-proposal
