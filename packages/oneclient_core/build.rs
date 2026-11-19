@@ -2,11 +2,32 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-fn version_key(version: &str) -> Vec<u32> {
-    version
+fn version_key(version: &str) -> (Vec<u32>, String) {
+    let numeric = version.split('-').next().unwrap_or(version);
+    let parts = numeric
         .split('.')
-        .map(|part| part.parse().expect("badge jar version must be numeric"))
-        .collect()
+        .map(|part| part.parse().expect("badge jar version prefix must be numeric"))
+        .collect();
+    (parts, version.to_string())
+}
+
+fn is_supported_version_token(version: &str) -> bool {
+    if !version
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-')
+    {
+        return false;
+    }
+
+    let mut segments = version.split('-');
+    let numeric = segments.next().unwrap_or_default();
+    !numeric.is_empty()
+        && numeric.split('.').all(|part| {
+            !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+        })
+        && segments.all(|part| {
+            !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        })
 }
 
 fn main() {
@@ -27,12 +48,7 @@ fn main() {
         else {
             continue;
         };
-        if version.is_empty()
-            || !version
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || byte == b'.')
-            || !path.is_file()
-        {
+        if !is_supported_version_token(version) || !path.is_file() {
             continue;
         }
 
