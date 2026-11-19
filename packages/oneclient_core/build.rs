@@ -19,9 +19,9 @@ fn version_key(version: &str) -> (Vec<u32>, String) {
 fn is_supported_version_token(version: &str) -> bool {
     let bytes = version.as_bytes();
     if bytes.len() == 6
-        && bytes[0..2].iter().all(u8::is_ascii_digit)
+        && bytes[0..2].iter().all(|byte| byte.is_ascii_digit())
         && bytes[2] == b'w'
-        && bytes[3..5].iter().all(u8::is_ascii_digit)
+        && bytes[3..5].iter().all(|byte| byte.is_ascii_digit())
         && bytes[5].is_ascii_lowercase()
     {
         return true;
