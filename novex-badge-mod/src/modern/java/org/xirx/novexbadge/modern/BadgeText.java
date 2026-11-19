@@ -4,12 +4,13 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.FontDescription;
+import net.minecraft.resources.Identifier;
 import org.xirx.novexbadge.Badge;
 
 public final class BadgeText {
-    private static final ResourceLocation BADGE_FONT =
-            ResourceLocation.fromNamespaceAndPath("novex_badges", "badge");
+    private static final FontDescription BADGE_FONT =
+            new FontDescription.Resource(Identifier.fromNamespaceAndPath("novex_badges", "badge"));
 
     private BadgeText() {}
 
