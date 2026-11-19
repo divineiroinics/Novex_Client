@@ -22,7 +22,7 @@ The first key-enabled release must be downloaded and installed manually by exist
 
 ## Included NOVEX badge mod
 
-The Windows release workflow reads the launcher's curated version catalog and dynamically builds and embeds a matching NOVEX badge mod for every supported **Fabric** release from Minecraft 1.18 through 1.21.11 and Minecraft 26.x. It uses Yarn mappings for the legacy 1.x game namespace and a separate Mojang-mapped source set for 26.x. Forge, NeoForge, Quilt, and vanilla installations are not covered by this Fabric-only mod. Versions before 1.18 use older Java/runtime APIs and are not included yet.
+The Windows release workflow reads the launcher's curated version catalog and dynamically builds and embeds a matching NOVEX badge mod for every listed **Fabric** target (currently Minecraft 1.18–1.21.11 and 26.x), while retaining the previously shipped 1.21.1, 1.21.4, 1.21.5, and 1.21.8 builds. It uses Yarn mappings for the legacy 1.x game namespace and a separate Mojang-mapped source set for 26.x. Forge, NeoForge, Quilt, and vanilla installations are not covered by this Fabric-only mod. Versions before 1.18 use older Java/runtime APIs and are not included yet.
 
 ## Contributing
 
