@@ -2,6 +2,7 @@ package org.xirx.novexbadge;
 
 import net.minecraft.text.Text;
 import net.minecraft.text.MutableText;
+import net.minecraft.text.Style;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import java.lang.reflect.Constructor;
