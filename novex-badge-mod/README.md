@@ -9,7 +9,7 @@ The launcher build script discovers every stable Fabric entry in NOVEX's curated
 - Minecraft 1.18 through 1.21.11 (Yarn mappings; Java 17 or 21 according to the game version)
 - Minecraft 26.x (Mojang's unobfuscated mappings; Java 25)
 
-Minecraft versions before 1.18, weekly snapshot identifiers, and non-Fabric loaders are not included. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
+Minecraft versions before 1.18, older weekly snapshot identifiers, and non-Fabric loaders are not included; the latest current weekly snapshot is attempted in nightlies only. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
 
 ## Behavior
 
