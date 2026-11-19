@@ -131,7 +131,7 @@ def java_release(version: str) -> int:
     if WEEKLY_VERSION_RE.fullmatch(version):
         year = int(version[:2])
         return 25 if year >= 26 else (21 if year >= 24 else 17)
-    match = re.match(r"^(\d+)\.", version)
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", version)
     if not match:
         raise ValueError(f"Unsupported Minecraft version format: {version}")
     major, minor, patch = (int(part or 0) for part in match.groups())
