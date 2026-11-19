@@ -10,6 +10,15 @@ public final class BadgeText {
 
     private BadgeText() {}
 
+    /** Adds the NOVEX client mark to this installation's own player name. */
+    public static Text prependNovexLogo(Text original) {
+        if (original == null) return null;
+        MutableText marker = Text.literal("\uE001")
+                .styled(style -> style.withFont(BADGE_FONT).withColor(Formatting.RED));
+        return marker.append(Text.literal(" ")).append(original.copy());
+    }
+
+    /** Adds a verified membership badge to a player's name. */
     public static Text prepend(Text original, Badge badge) {
         if (original == null || badge == null) return original;
 
