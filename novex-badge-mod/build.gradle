@@ -1,5 +1,5 @@
 plugins {
-    id "fabric-loom" version "1.8.13"
+    id "fabric-loom" version "1.19-SNAPSHOT"
 }
 
 version = project.mod_version
@@ -49,17 +49,17 @@ processResources {
     dependsOn tasks.named("extractNovexBadge")
     inputs.property "version", project.version
     filesMatching("fabric.mod.json") {
-        expand "version": project.version, "minecraft_version": project.minecraft_version, "loader_version": project.loader_version
+        expand "version": project.version, "minecraft_version": project.minecraft_version, "loader_version": project.loader_version, "java_release": project.java_release
     }
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
     withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = Integer.parseInt(project.java_release.toString())
 }
