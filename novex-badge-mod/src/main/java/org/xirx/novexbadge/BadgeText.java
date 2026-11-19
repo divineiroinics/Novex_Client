@@ -4,11 +4,34 @@ import net.minecraft.text.Text;
 import net.minecraft.text.MutableText;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 public final class BadgeText {
-    private static final Identifier BADGE_FONT = Identifier.of("novex_badges", "badge");
+    private static final Identifier BADGE_FONT = createBadgeFont();
 
     private BadgeText() {}
+
+    // Identifier.of is used by current Minecraft versions; older 1.x versions
+    // expose the same constructor instead. Reflection keeps one source compatible
+    // across both APIs without changing the identifier value.
+    private static Identifier createBadgeFont() {
+        try {
+            Method factory = Identifier.class.getMethod("of", String.class, String.class);
+            return (Identifier) factory.invoke(null, "novex_badges", "badge");
+        } catch (NoSuchMethodException ignored) {
+            try {
+                Constructor<Identifier> constructor =
+                        Identifier.class.getDeclaredConstructor(String.class, String.class);
+                constructor.setAccessible(true);
+                return constructor.newInstance("novex_badges", "badge");
+            } catch (ReflectiveOperationException error) {
+                throw new IllegalStateException("Could not create NOVEX badge font identifier", error);
+            }
+        } catch (ReflectiveOperationException error) {
+            throw new IllegalStateException("Could not create NOVEX badge font identifier", error);
+        }
+    }
 
     /** Adds the NOVEX client mark to this installation's own player name. */
     public static Text prependNovexLogo(Text original) {
