@@ -4,10 +4,10 @@ Client-side badge renderer for verified NOVEX Minecraft identities.
 
 ## Current build targets
 
-The launcher build script discovers every stable Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. Windows nightlies additionally attempt the newest Fabric preview in each source family (1.x and 26.x), plus the current modern weekly snapshot; previews are embedded only when mappings are available and compilation succeeds. Failed previews are skipped without failing the stable build, and signed releases remain stable-only. The current catalog includes these game-version families:
+The launcher build script discovers every stable Fabric entry in NOVEX's curated Minecraft version catalog and builds a separate matching jar. It also retains the previously shipped Minecraft 1.21.1, 1.21.4, 1.21.5, and 1.21.8 targets. Windows nightlies additionally attempt the newest Fabric preview in each source family (1.x and 26+), plus the current modern weekly snapshot; previews are embedded only when mappings are available and compilation succeeds. Failed previews are skipped without failing the stable build, and signed releases remain stable-only. The current catalog includes these game-version families:
 
 - Minecraft 1.18 through 1.21.11 (Yarn mappings; Java 17 or 21 according to the game version)
-- Minecraft 26.x (Mojang's unobfuscated mappings; Java 25)
+- Minecraft 26+ (Mojang's unobfuscated mappings; Java 25)
 
 Minecraft versions before 1.18, older weekly snapshot identifiers, and non-Fabric loaders are not included; the latest current weekly snapshot is attempted in nightlies only. Forge, NeoForge, Quilt, and vanilla require separate loader-specific integrations. The catalog targets are discovered at build time rather than maintained as a hardcoded matrix; the four original targets are kept as backward-compatibility builds.
 
