@@ -38,7 +38,7 @@ def catalog_versions() -> list[str]:
             patch = entry.get("patch_version")
             base = f"{major}.{minor}" if major >= 26 else f"1.{major}.{minor}"
             version = f"{base}.{int(patch)}" if patch is not None else base
-            if not re.fullmatch(r"(?:1|[2-9][0-9]*)\.\\d+(?:\.\\d+)?", version):
+            if not re.fullmatch(r"(?:1|[2-9][0-9]*)\.\d+(?:\.\d+)?", version):
                 continue
             numeric = tuple(int(part) for part in version.split("."))
             if major == 1 and numeric[1] < 18:
