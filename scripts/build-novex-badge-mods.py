@@ -108,6 +108,7 @@ def main() -> int:
             "org.xirx.novexbadge.modern.mixin"
             if modern else "org.xirx.novexbadge.mixin"
         )
+        mixin_compatibility = "JAVA_25" if modern else "JAVA_21"
         print(
             f"\n=== Building NOVEX Badges for Minecraft {version} "
             f"({mapping_mode} mappings, Fabric Loader {loader}, Java release {release}) ===",
@@ -120,6 +121,7 @@ def main() -> int:
             f"-Ploader_version={loader}",
             f"-Pjava_release={release}",
             f"-Pmixin_package={mixin_package}",
+            f"-Pmixin_compatibility={mixin_compatibility}",
         ]
         if yarn:
             command.append(f"-Pyarn_mappings={yarn}")
