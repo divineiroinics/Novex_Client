@@ -19,7 +19,7 @@ CATALOG_URL = "https://data-v2.polyfrost.org/oneclient/versions/metadata.json"
 FABRIC_META = "https://meta.fabricmc.net/v2/versions"
 USER_AGENT = "NOVEX-Client-Badge-Build/1.0"
 PREVIEW_VERSION_RE = re.compile(
-    r"^(?:1\.\d+(?:\.\d+)?|26\.\d+(?:\.\d+)?)-(?:snapshot-\d+|pre-?\d+|rc-?\d+)$"
+    r"^(?:1\.\d+(?:\.\d+)?|\d{2,}\.\d+(?:\.\d+)?)-(?:snapshot-\d+|pre-?\d+|rc-?\d+)$"
 )
 WEEKLY_VERSION_RE = re.compile(r"^\d{2}w\d{2}[a-z]$")
 
@@ -68,6 +68,16 @@ def catalog_versions() -> list[str]:
     return sorted(versions, key=key)
 
 
+def is_modern_namespace(version: str) -> bool:
+    match = re.match(r"^(\\d+)\\.", version)
+    if match and int(match.group(1)) >= 26:
+        return True
+    return bool(
+        WEEKLY_VERSION_RE.fullmatch(version)
+        and int(version[:2]) >= 26
+    )
+
+
 def preview_versions() -> list[str]:
     """Return the newest Fabric preview for each supported namespace family.
 
@@ -76,16 +86,21 @@ def preview_versions() -> list[str]:
     """
     entries = fetch_json(f"{FABRIC_META}/game")
     selected: list[str] = []
-    for family in ("26.", "1."):
-        for item in entries:
-            version = str(item.get("version", ""))
-            if (
-                item.get("stable") is False
-                and version.startswith(family)
-                and PREVIEW_VERSION_RE.fullmatch(version)
-            ):
-                selected.append(version)
-                break
+    legacy_selected = False
+    modern_selected = False
+    for item in entries:
+        version = str(item.get("version", ""))
+        if item.get("stable") is not False or not PREVIEW_VERSION_RE.fullmatch(version):
+            continue
+        if version.startswith("1.") and not legacy_selected:
+            selected.append(version)
+            legacy_selected = True
+        elif is_modern_namespace(version) and not modern_selected:
+            selected.append(version)
+            modern_selected = True
+        if legacy_selected and modern_selected:
+            break
+
     for item in entries:
         version = str(item.get("version", ""))
         if item.get("stable") is False and WEEKLY_VERSION_RE.fullmatch(version):
@@ -168,7 +183,7 @@ def main() -> int:
     for version in all_versions:
         is_preview = version in preview_set
         try:
-            modern = version.startswith("26.") or (bool(WEEKLY_VERSION_RE.fullmatch(version)) and int(version[:2]) >= 26)
+            modern = is_modern_namespace(version)
             yarn = None if modern else latest_yarn(version)
             loader = latest_loader(version)
             release = java_release(version)
