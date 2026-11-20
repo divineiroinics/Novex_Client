@@ -136,6 +136,7 @@ digest-algorithm = "sha256"
 timestamp-url = "https://timestamp.digicert.com"
 
 [package.metadata.packager.nsis]
+install-mode = "perMachine"
 preinstall-section = """
 Section "-OneClientTauriMigration"
   ; Stale Tauri root start-menu shortcut (this build only writes the sub-folder one).
