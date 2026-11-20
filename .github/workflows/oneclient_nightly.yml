@@ -224,15 +224,24 @@ jobs:
           cargo generate-rpm -p packages/oneclient_app
           cp target/generate-rpm/*.rpm "${{ steps.outdir.outputs.dir }}/"
 
-      - name: (Windows) Smoke-test installer layout
+      - name: (Windows) Smoke-test installer and VC++ bootstrap
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $dest = 'C:\oneclient-smoke'
+          $runtimeKey = 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64'
+
+          # Force the installer down its missing-runtime path on this disposable
+          # hosted runner, even if the image already has the VC++ runtime.
+          Remove-Item -Recurse -Force $runtimeKey -ErrorAction SilentlyContinue
+          if (Test-Path $runtimeKey) { throw 'Could not clear the VC++ runtime detection key for the bootstrap test' }
+
           Remove-Item -Recurse -Force $dest -ErrorAction SilentlyContinue
           $exe = Resolve-Path (Get-ChildItem '${{ steps.outdir.outputs.dir }}/*-setup.exe')[0].FullName
           # NSIS: /S is silent, /D= sets the install dir and must be the last arg.
+          # The installer must download and silently install Microsoft's official
+          # redistributable because the detection key is deliberately absent.
           $p = Start-Process -FilePath $exe -ArgumentList '/S', "/D=$dest" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Write-Error "installer exited $($p.ExitCode)"; exit 1 }
 
@@ -249,7 +258,13 @@ jobs:
               exit 1
             }
           }
-          Write-Host "OK: $($(Get-ChildItem 'target/crt/*.dll').Count) CRT DLLs sit beside oneclient_app.exe"
+
+          $runtime = Get-ItemProperty -Path $runtimeKey -ErrorAction Stop
+          if ($runtime.Installed -ne 1 -or $runtime.Major -ne 14 -or $runtime.Minor -lt 40) {
+            throw "VC++ bootstrap did not install a supported x64 v14 runtime: Installed=$($runtime.Installed), Major=$($runtime.Major), Minor=$($runtime.Minor)"
+          }
+          Write-Host "OK: VC++ x64 runtime installed (v$($runtime.Major).$($runtime.Minor).$($runtime.Bld))"
+          Write-Host "OK: $($(Get-ChildItem 'target/crt/*.dll').Count) Microsoft CRT DLLs sit beside oneclient_app.exe"
 
       # Upload debug info (dSYM / .dwp / .pdb produced by the release profile's
       # split-debuginfo) to Sentry so nightly crash reports get real file/function/
