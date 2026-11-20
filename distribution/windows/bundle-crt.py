@@ -146,7 +146,10 @@ def patch(cargo_toml: Path, dlls: list[Path]) -> None:
     )
 
     text = REGION_RES.sub(lambda _: block, text, count=1)
-    text = REGION_SEC.sub(lambda _: SECTION_REPLACEMENT, text, count=1)
+    # Cargo.toml uses TOML basic strings: escape NSIS path separators for
+    # valid TOML while preserving the single backslashes NSIS needs after parsing.
+    escaped_section = SECTION_REPLACEMENT.replace("\\", "\\\\")
+    text = REGION_SEC.sub(lambda _: escaped_section, text, count=1)
     cargo_toml.write_text(text, encoding="utf-8")
     print(f"patched {cargo_toml} with {len(dlls)} app-local CRT DLLs and enabled VC++ bootstrap")
 
