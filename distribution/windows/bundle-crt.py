@@ -43,7 +43,7 @@ Section "-NOVEXVCppRuntime"
   DetailPrint "Downloading the official Microsoft Visual C++ Redistributable..."
   ; curl.exe is inbox on supported Windows 10/11 systems. Download only from
   ; Microsoft's stable aka.ms endpoint; never ship or execute an untrusted copy.
-  ExecWait '"$SYSDIR\\curl.exe" --fail --location --silent --show-error "https://aka.ms/vs/17/release/vc_redist.x64.exe" --output "$TEMP\\NOVEX-vc_redist.x64.exe"' $R3
+  ExecWait '"$SYSDIR\\curl.exe" --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --retry 2 --retry-delay 2 "https://aka.ms/vs/17/release/vc_redist.x64.exe" --output "$TEMP\\NOVEX-vc_redist.x64.exe"' $R3
   ${If} $R3 != 0
     MessageBox MB_OK|MB_ICONSTOP "NOVEX could not download the Microsoft Visual C++ Runtime. Check your internet connection and run the installer again."
     Abort
