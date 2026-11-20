@@ -27,9 +27,9 @@ CRT_GLOB = r"VC\Redist\MSVC\**\x64\Microsoft.VC*.CRT\*.dll"
 SECTION_REPLACEMENT = r"""; >>> VC_REDIST_SECTION >>>
 Section "-NOVEXVCppRuntime"
   SetRegView 64
-  ReadRegDWORD $R0 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64" "Installed"
-  ReadRegDWORD $R1 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64" "Major"
-  ReadRegDWORD $R2 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64" "Minor"
+  ReadRegDWORD $R0 HKLM "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64" "Installed"
+  ReadRegDWORD $R1 HKLM "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64" "Major"
+  ReadRegDWORD $R2 HKLM "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64" "Minor"
   SetRegView lastused
 
   ; Skip installation when a sufficiently recent v14 x64 runtime is present.
@@ -43,15 +43,15 @@ Section "-NOVEXVCppRuntime"
   DetailPrint "Downloading the official Microsoft Visual C++ Redistributable..."
   ; curl.exe is inbox on supported Windows 10/11 systems. Download only from
   ; Microsoft's stable aka.ms endpoint; never ship or execute an untrusted copy.
-  ExecWait '"$SYSDIR\\curl.exe" --fail --location --silent --show-error "https://aka.ms/vs/17/release/vc_redist.x64.exe" --output "$TEMP\\NOVEX-vc_redist.x64.exe"' $R3
+  ExecWait '"$SYSDIR\curl.exe" --fail --location --silent --show-error "https://aka.ms/vs/17/release/vc_redist.x64.exe" --output "$TEMP\NOVEX-vc_redist.x64.exe"' $R3
   ${If} $R3 != 0
     MessageBox MB_OK|MB_ICONSTOP "NOVEX could not download the Microsoft Visual C++ Runtime. Check your internet connection and run the installer again."
     Abort
   ${EndIf}
 
   DetailPrint "Installing Microsoft Visual C++ Redistributable (x64)..."
-  ExecWait '"$TEMP\\NOVEX-vc_redist.x64.exe" /install /quiet /norestart' $R3
-  Delete "$TEMP\\NOVEX-vc_redist.x64.exe"
+  ExecWait '"$TEMP\NOVEX-vc_redist.x64.exe" /install /quiet /norestart' $R3
+  Delete "$TEMP\NOVEX-vc_redist.x64.exe"
   ; 0 = success, 3010 = success (restart required).
   ${If} $R3 != 0
   ${AndIf} $R3 != 3010
