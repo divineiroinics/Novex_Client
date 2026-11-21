@@ -6,7 +6,7 @@ use crate::domain::{ContentType, ProviderId};
 use crate::error::{PathsError, PathsResult};
 
 const QUALIFIER: &str = "org";
-const ORGANIZATION: &str = "Polyfrost";
+const ORGANIZATION: &str = "XIRX";
 
 #[cfg(not(debug_assertions))]
 const APPLICATION: &str = "NOVEX Client";
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(
             tail,
             vec![OsStr::new(APPLICATION), OsStr::new(ORGANIZATION)],
-            "every Polyfrost product shares one folder and takes a single name inside it"
+            "every XIRX product shares one folder and takes a single name inside it"
         );
     }
 
