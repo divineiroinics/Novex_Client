@@ -132,11 +132,20 @@ for source_root in [ROOT / "packages"]:
             source = source_path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        updated = string_literal.sub(
-            lambda match: '"' + match.group(1).replace("OneClient", "NOVEX Client") + '"',
-            source,
-        )
+        def rebrand_literal(match):
+            value = match.group(1)
+            value = value.replace("OneClient", "NOVEX Client").replace("One Client", "NOVEX Client")
+            # Replace public-facing organization labels, but preserve URLs and
+            # legally required upstream copyright / license attribution.
+            if "Polyfrost" in value and "://" not in value and not re.search(
+                r"(?i)copyright|copyright holder|license|licence|attribution|\u00a9|\(c\)|contributors",
+                value,
+            ):
+                value = value.replace("Polyfrost", "XIRX")
+            return '"' + value + '"'
+
+        updated = string_literal.sub(rebrand_literal, source)
         if updated != source:
             source_path.write_text(updated, encoding="utf-8")
 
-print("NOVEX branding overlay applied; app-visible OneClient strings and generated icons refreshed.")
+print("NOVEX branding overlay applied; app-visible OneClient/One Client and public-facing Polyfrost labels refreshed; legal attribution preserved.")

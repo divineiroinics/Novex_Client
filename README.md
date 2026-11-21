@@ -4,7 +4,7 @@
 
 # NOVEX Client
 
-NOVEX Client is an open-source Minecraft client and launcher based on the OneClient project by Polyfrost. It brings together a collection of packaged and pre-configured mods in one application.
+NOVEX Client is an open-source Minecraft client and launcher maintained and branded by XIRX. It preserves the original OneClient experience while bringing together a collection of packaged and pre-configured mods in one application.
 
 </div>
 
