@@ -21,46 +21,11 @@ VSWHERE = Path(
 )
 CRT_GLOB = r"VC\Redist\MSVC\**\x64\Microsoft.VC*.CRT\*.dll"
 
-# NSIS runs this section during installation. The app-local DLLs below are the
-# primary runtime fallback; this bootstrap also installs Microsoft's official
-# x64 redistributable system-wide so other native apps can use it too.
+# App-local Microsoft CRT DLLs are bundled beside the executable. Avoid a
+# machine-wide redistributable install so per-user setup never needs elevation.
 SECTION_REPLACEMENT = r"""; >>> VC_REDIST_SECTION >>>
-Section "-NOVEXVCppRuntime"
-  SetRegView 64
-  ReadRegDWORD $R0 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64" "Installed"
-  ReadRegDWORD $R1 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64" "Major"
-  ReadRegDWORD $R2 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64" "Minor"
-  SetRegView lastused
-
-  ; Skip installation when a sufficiently recent v14 x64 runtime is present.
-  ${If} $R0 == 1
-  ${AndIf} $R1 == 14
-  ${AndIf} $R2 >= 40
-    DetailPrint "Microsoft Visual C++ Runtime is already installed."
-    Goto vcredist_done
-  ${EndIf}
-
-  DetailPrint "Downloading the official Microsoft Visual C++ Redistributable..."
-  ; curl.exe is inbox on supported Windows 10/11 systems. Download only from
-  ; Microsoft's stable aka.ms endpoint; never ship or execute an untrusted copy.
-  ExecWait '"$SYSDIR\\curl.exe" --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --retry 2 --retry-delay 2 "https://aka.ms/vs/17/release/vc_redist.x64.exe" --output "$TEMP\\NOVEX-vc_redist.x64.exe"' $R3
-  ${If} $R3 != 0
-    MessageBox MB_OK|MB_ICONSTOP "NOVEX could not download the Microsoft Visual C++ Runtime. Check your internet connection and run the installer again."
-    Abort
-  ${EndIf}
-
-  DetailPrint "Installing Microsoft Visual C++ Redistributable (x64)..."
-  ExecWait '"$TEMP\\NOVEX-vc_redist.x64.exe" /install /quiet /norestart' $R3
-  Delete "$TEMP\\NOVEX-vc_redist.x64.exe"
-  ; 0 = success, 3010 = success (restart required).
-  ${If} $R3 != 0
-  ${AndIf} $R3 != 3010
-    MessageBox MB_OK|MB_ICONSTOP "The Microsoft Visual C++ Runtime installer failed (code $R3). NOVEX setup cannot continue."
-    Abort
-  ${EndIf}
-
-  vcredist_done:
-SectionEnd
+; App-local Microsoft CRT DLLs are bundled beside the executable.
+; No machine-wide redistributable install is required.
 ; <<< VC_REDIST_SECTION <<<"""
 
 
