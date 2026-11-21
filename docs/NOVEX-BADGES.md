@@ -13,7 +13,7 @@ All tables have RLS enabled and no direct grants for browser roles. The registra
 ## How verification works
 
 1. The user completes NOVEX's existing Microsoft → Xbox Live → XSTS → Minecraft sign-in.
-2. OneClient sends the resulting short-lived Minecraft Services access token to the NOVEX Edge Function over HTTPS.
+2. NOVEX Client sends the resulting short-lived Minecraft Services access token to the NOVEX Edge Function over HTTPS.
 3. The Edge Function uses that token once against `https://api.minecraftservices.com/minecraft/profile`.
 4. Minecraft Services returns the authoritative UUID and current username. NOVEX stores those two public profile fields and the verification timestamp only.
 5. The access token is not stored in Supabase and is not written to application logs.
