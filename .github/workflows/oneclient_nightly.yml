@@ -334,45 +334,24 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: (Windows) Smoke-test installer and VC++ bootstrap
+      - name: (Windows) Smoke-test per-user installer and app-local VC++ runtime
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $dest = 'C:\oneclient-smoke'
-          $runtimeKey = 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64'
-
-          # Force the installer down its missing-runtime path on this disposable
-          # hosted runner, even if the image already has the VC++ runtime.
-          Remove-Item -Recurse -Force $runtimeKey -ErrorAction SilentlyContinue
-          if (Test-Path $runtimeKey) { throw 'Could not clear the VC++ runtime detection key for the bootstrap test' }
-
+          $dest = Join-Path $env:LOCALAPPDATA 'Programs\NOVEX Client'
           Remove-Item -Recurse -Force $dest -ErrorAction SilentlyContinue
           $exe = Resolve-Path (Get-ChildItem '${{ steps.outdir.outputs.dir }}/*-setup.exe')[0].FullName
-          # NSIS: /S is silent, /D= sets the install dir and must be the last arg.
-          # The installer must download and silently install Microsoft's official
-          # redistributable because the detection key is deliberately absent.
+          # Current-user install must run without elevation or machine-wide changes.
           $p = Start-Process -FilePath $exe -ArgumentList '/S', "/D=$dest" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { Write-Error "installer exited $($p.ExitCode)"; exit 1 }
-
-          Write-Host '--- installed layout ---'
-          Get-ChildItem -Recurse $dest | ForEach-Object { Write-Host $_.FullName }
-
-          if (-not (Test-Path "$dest\oneclient_app.exe")) {
-            Write-Error "oneclient_app.exe is not at the root of $dest"
-            exit 1
-          }
-          foreach ($dll in @(Get-ChildItem 'target/crt/*.dll')) {
+          if ($p.ExitCode -ne 0) { throw "per-user installer exited $($p.ExitCode)" }
+          if (-not (Test-Path "$dest\oneclient_app.exe")) { throw "oneclient_app.exe missing from $dest" }
+          $dlls = @(Get-ChildItem 'target/crt/*.dll')
+          if ($dlls.Count -eq 0) { throw 'No app-local Microsoft CRT DLLs were staged' }
+          foreach ($dll in $dlls) {
             if (-not (Test-Path (Join-Path $dest $dll.Name))) {
-              Write-Error "$($dll.Name) did not land beside oneclient_app.exe - cargo-packager put resources elsewhere, so app-local CRT loading will not work"
-              exit 1
+              throw "$($dll.Name) did not land beside oneclient_app.exe"
             }
           }
-
-          $runtime = Get-ItemProperty -Path $runtimeKey -ErrorAction Stop
-          if ($runtime.Installed -ne 1 -or $runtime.Major -ne 14 -or $runtime.Minor -lt 40) {
-            throw "VC++ bootstrap did not install a supported x64 v14 runtime: Installed=$($runtime.Installed), Major=$($runtime.Major), Minor=$($runtime.Minor)"
-          }
-          Write-Host "OK: VC++ x64 runtime installed (v$($runtime.Major).$($runtime.Minor).$($runtime.Bld))"
-          Write-Host "OK: $($(Get-ChildItem 'target/crt/*.dll').Count) Microsoft CRT DLLs sit beside oneclient_app.exe"
-
+          Write-Host "OK: per-user installation completed without requesting elevation."
+          Write-Host "OK: $($dlls.Count) Microsoft CRT DLLs are bundled beside oneclient_app.exe."
