@@ -59,8 +59,22 @@ for path in [
     APP / "assets" / "icons" / "icon-logo.svg",
     APP / "assets" / "icons" / "pixel" / "icon-logo.svg",
     APP / "icons" / "OneClient.icon" / "Assets" / "novex-mark.svg",
+    APP / "icons" / "OneClient.icon" / "Assets" / "oneclient-mark.svg",
 ]:
     path.write_text(svg, encoding="utf-8")
+
+# Use the exact same canonical NOVEX emblem for the in-game nameplate and Tab glyph.
+# A 16px source with a 12px font height keeps the mark legible beside Minecraft names.
+badge_root = ROOT / "novex-badge-mod" / "src" / "main" / "resources" / "assets" / "novex_badges"
+badge_image = render(16)
+badge_image.save(badge_root / "novex_badge.png", format="PNG", optimize=True)
+(badge_root / "textures").mkdir(parents=True, exist_ok=True)
+badge_image.save(badge_root / "textures" / "novex_badge.png", format="PNG", optimize=True)
+font_path = badge_root / "font" / "badge.json"
+font = json.loads(font_path.read_text(encoding="utf-8"))
+font["providers"][0]["ascent"] = 10
+font["providers"][0]["height"] = 12
+font_path.write_text(json.dumps(font, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
 
 lang_path = APP / "lang" / "en_us.json"
 if lang_path.exists():
@@ -148,4 +162,4 @@ for source_root in [ROOT / "packages"]:
         if updated != source:
             source_path.write_text(updated, encoding="utf-8")
 
-print("NOVEX branding overlay applied; app-visible OneClient/One Client and public-facing Polyfrost labels refreshed; legal attribution preserved.")
+print("NOVEX branding overlay applied; app icons, launcher logos, in-game nameplate and Tab badge assets regenerated; legal attribution preserved.")

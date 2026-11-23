@@ -3,8 +3,8 @@
     {
       "type": "bitmap",
       "file": "novex_badges:novex_badge.png",
-      "ascent": 7,
-      "height": 8,
+      "ascent": 10,
+      "height": 12,
       "chars": [
         ""
       ]
