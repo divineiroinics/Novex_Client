@@ -9,6 +9,8 @@ pub const RELEASES_URL: &str = "https://github.com/divineiroinics/Novex_Client/r
 
 
 
+
+
 pub const UPDATER_ENDPOINT: &str = "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json";
 
 pub const UPDATER_PUBKEY: &str = match option_env!("NOVEX_UPDATER_PUBKEY") { Some(value) => value, None => "" };
