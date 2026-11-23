@@ -1334,7 +1334,11 @@ async fn install_novex_badge_mod(
         tracing::warn!(error = %err, "could not write NOVEX badge consent marker");
     }
 
-    if cluster.mc_loader != oneclient_common::domain::GameLoader::Fabric {
+    if !matches!(
+        cluster.mc_loader,
+        oneclient_common::domain::GameLoader::Fabric
+            | oneclient_common::domain::GameLoader::Quilt
+    ) {
         return;
     }
 
