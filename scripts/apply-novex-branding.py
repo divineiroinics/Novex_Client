@@ -74,7 +74,7 @@ font_path = badge_root / "font" / "badge.json"
 font = json.loads(font_path.read_text(encoding="utf-8"))
 font["providers"][0]["ascent"] = 10
 font["providers"][0]["height"] = 12
-font_path.write_text(json.dumps(font, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+font_path.write_text(json.dumps(font, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 lang_path = APP / "lang" / "en_us.json"
 if lang_path.exists():
