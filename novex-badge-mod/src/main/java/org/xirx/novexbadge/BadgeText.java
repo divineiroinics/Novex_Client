@@ -60,7 +60,8 @@ public final class BadgeText {
     public static Text prependNovexLogo(Text original) {
         if (original == null) return null;
         MutableText marker = Text.literal("\uE001")
-                .styled(style -> withBadgeFont(style).withColor(Formatting.RED));
+                .styled(BadgeText::withBadgeFont);
+        // Preserve the supplied emblem's original red gradient and pale center.
         return marker.append(Text.literal(" ")).append(original.copy());
     }
 
