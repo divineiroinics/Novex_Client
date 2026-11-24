@@ -193,6 +193,33 @@ jobs:
             exit 1
           fi
 
+          # cargo-packager-updater expects a minisign public key, not a shell
+          # command, a private key, or a key-file comment. Validate the bare
+          # base64 payload before compiling it into the release binary.
+          python3 - <<'PY'
+          import base64
+          import os
+          import re
+
+          key = os.environ["NOVEX_UPDATER_PUBKEY"].strip()
+          if not re.fullmatch(r"[A-Za-z0-9+/]{56}", key):
+              raise SystemExit(
+                  "::error::NOVEX_UPDATER_PUBKEY must be the bare 56-character "
+                  "minisign public-key payload printed by cargo-packager, not "
+                  "the signer command or a private key."
+              )
+          try:
+              decoded = base64.b64decode(key, validate=True)
+          except ValueError as error:
+              raise SystemExit(f"::error::NOVEX_UPDATER_PUBKEY is not valid base64: {error}")
+          if len(decoded) != 42:
+              raise SystemExit(
+                  f"::error::NOVEX_UPDATER_PUBKEY decoded to {len(decoded)} bytes; "
+                  "expected a 42-byte minisign public key."
+              )
+          print("NOVEX updater public-key format validated (key value not displayed).")
+          PY
+
       - name: Build release binary
         shell: bash
         env:
