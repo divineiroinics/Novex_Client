@@ -43,6 +43,30 @@ jobs:
           gradle-version: "9.8.0"
       - name: Build every Fabric version in the NOVEX catalog
         run: python3 scripts/build-novex-badge-mods.py --include-previews
+      - name: Validate Fabric metadata is Quilt-compatible
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          jars = sorted(Path("packages/oneclient_core").glob("novex-badges-*.jar"))
+          if not jars:
+              raise SystemExit("No badge jars were built")
+          for jar in jars:
+              with ZipFile(jar) as archive:
+                  metadata = json.loads(archive.read("fabric.mod.json"))
+                  if "fabricloader" in metadata.get("depends", {}):
+                      raise SystemExit(f"{jar.name} still hard-requires Fabric Loader and cannot use Quilt's Fabric compatibility")
+                  if not metadata.get("entrypoints", {}).get("client"):
+                      raise SystemExit(f"{jar.name} has no client entrypoint")
+                  if "novex_badges.client.mixins.json" not in metadata.get("mixins", []):
+                      raise SystemExit(f"{jar.name} has no NOVEX client mixin config")
+              print(f"Quilt-compatible Fabric metadata verified: {jar.name}")
+          PY
+
       - name: Upload all badge mod variants
         uses: actions/upload-artifact@v4
         with:
