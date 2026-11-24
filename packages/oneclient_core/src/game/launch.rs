@@ -1340,7 +1340,7 @@ async fn install_novex_badge_mod(
             | oneclient_common::domain::GameLoader::Quilt
     ) {
         tracing::debug!(
-            loader = %cluster.mc_loader,
+            loader = ?cluster.mc_loader,
             minecraft_version,
             "NOVEX badges are not installed for this loader yet; the bundled badge mod currently supports Fabric and Quilt"
         );
