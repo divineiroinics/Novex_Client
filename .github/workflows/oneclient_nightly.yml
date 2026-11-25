@@ -5,7 +5,7 @@ on:
   push:
     branches: [main, novex/rebrand]
   pull_request:
-    branches: [novex/rebrand]
+    branches: [main, novex/rebrand]
   workflow_dispatch:
 
 concurrency:
