@@ -2,6 +2,9 @@ name: Verify NOVEX Updater Signing Keys
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
