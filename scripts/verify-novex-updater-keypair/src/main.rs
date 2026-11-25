@@ -16,9 +16,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let password = env::var("CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD").unwrap_or_default();
     let configured_public_key = env::var("NOVEX_UPDATER_PUBKEY").unwrap_or_default();
 
+    // GitHub secret editors and copy/paste workflows can leave quote wrappers
+    // in the value. Quotes are never valid in minisign's key-file encoding;
+    // remove only those wrappers/noise before decoding. Never log this value.
+    let normalized_private_key = private_key.replace('"', "");
+
     // Decode using the exact cargo-packager library used by the release workflow,
     // then derive the public key cryptographically. Never print or persist the secret.
-    let secret_key = decode_private_key(&private_key, Some(&password))?;
+    let secret_key = decode_private_key(&normalized_private_key, Some(&password))?;
     let public_key = PublicKey::from_secret_key(&secret_key)?;
     let public_key_box = public_key.to_box()?.to_string();
     let derived_public_key = STANDARD.encode(public_key_box);
