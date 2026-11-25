@@ -6,7 +6,7 @@ use std::{env, process};
 fn normalize_private_key(value: &str) -> String {
     value
         .chars()
-        .filter(|character| !character.is_ascii_whitespace() && *character != '"')
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(*character, '+' | '/' | '='))
         .collect()
 }
 
@@ -55,8 +55,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalizes_copy_paste_whitespace_and_quote_wrappers() {
-        let normalized = normalize_private_key("  \"YWJj\nZGVm\"  ");
+    fn normalizes_copy_paste_noise_around_base64() {
+        let normalized = normalize_private_key("  \"YWJj$\\nZGVm!\"  ");
         assert_eq!(normalized, "YWJjZGVm");
     }
 }
