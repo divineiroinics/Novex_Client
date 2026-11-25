@@ -27,9 +27,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("{derived_public_key}");
 
     if configured_public_key.trim() != derived_public_key {
-        return Err(
-            "NOVEX_UPDATER_PUBKEY does not match CARGO_PACKAGER_SIGN_PRIVATE_KEY.              Set the repository Actions variable to the derived public key printed above,              then rerun this workflow. The private key was not printed.".into(),
-        );
+        return Err(concat!(
+            "NOVEX_UPDATER_PUBKEY does not match CARGO_PACKAGER_SIGN_PRIVATE_KEY. ",
+            "Set the repository Actions variable to the derived public key printed above, ",
+            "then rerun this workflow. The private key was not printed."
+        ).into());
     }
 
     println!("NOVEX updater public/private signing key pair matches.");
