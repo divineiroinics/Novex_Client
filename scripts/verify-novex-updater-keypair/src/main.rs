@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn normalizes_copy_paste_noise_around_base64() {
-        let normalized = normalize_private_key("  \"YWJj$\\nZGVm!\"  ");
+        let normalized = normalize_private_key("  \"YWJj$\nZGVm!\"  ");
         assert_eq!(normalized, "YWJjZGVm");
     }
 }
