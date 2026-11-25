@@ -28,7 +28,7 @@ pub fn file(package_id: &str, enabled: bool, hidden: bool) -> BundleFile {
 }
 
 pub fn archive(category: &str, enabled: bool, files: Vec<BundleFile>) -> BundleArchive {
-    let name = format!("OneClient 1.21.11 Fabric [{category}]");
+    let name = format!("NOVEX Client 1.21.11 Fabric [{category}]");
     BundleArchive {
         bundle: Bundle {
             remote_path: format!("/bundles/{category}.mrpack"),
@@ -76,5 +76,6 @@ pub fn cluster(id: i64) -> Cluster {
         tags: Vec::new(),
         cover_path: None,
         dir_target: Default::default(),
+        takes_bundles: false,
     }
 }

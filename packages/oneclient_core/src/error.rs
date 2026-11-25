@@ -79,6 +79,9 @@ pub enum LauncherError {
 
     #[error("minecraft: {0}")]
     Minecraft(String),
+
+    #[error("NOVEX Client exports are not checked for improvements")]
+    ShareNotScreened,
 }
 
 impl LauncherError {
@@ -215,7 +218,7 @@ mod tests {
 
     #[test]
     fn a_missing_asset_directory_asks_for_a_repair() {
-        let path = "/Users/someone/Library/Application Support/org.Polyfrost.OneClient-dev/metadata/assets";
+        let path = "/Users/someone/Library/Application Support/org.XIRX.NOVEX Client-dev/metadata/assets";
         let err = not_found(path);
 
         assert!(err.indicates_missing_files(), "{err}");

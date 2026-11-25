@@ -167,6 +167,42 @@ impl AuthService {
 
         let account = result?;
         tracing::info!(username = %account.username, "Microsoft login succeeded");
+
+        if account.is_microsoft() && !oneclient_common::consent::declined() {
+            // Send the short-lived Minecraft Services token only after the user
+            // has accepted NOVEX's privacy terms. A declined user can still sign in;
+            // their profile simply remains unverified and receives no badge.
+            // Send the short-lived Minecraft Services token only for a live
+            // profile check. The NOVEX endpoint discards it after verification.
+            let verification_request = self
+                .net
+                .http()
+                .post("https://epsqlgboxuwbfedqhuax.supabase.co/functions/v1/novex-badge-lookup")
+                .json(&serde_json::json!({
+                    "action": "verify",
+                    "minecraft_access_token": &account.access_token,
+                }))
+                .timeout(std::time::Duration::from_secs(8))
+                .build();
+
+            match verification_request {
+                Ok(request) => match self.net.send(request).await {
+                    Ok(response) if response.status().is_success() => {
+                        tracing::info!("NOVEX verified the Microsoft Minecraft profile");
+                    }
+                    Ok(response) => {
+                        tracing::warn!(status = %response.status(), "NOVEX profile verification was unavailable");
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "NOVEX profile verification request failed");
+                    }
+                },
+                Err(error) => {
+                    tracing::warn!(%error, "Could not prepare NOVEX profile verification request");
+                }
+            }
+        }
+
         self.store
             .lock()
             .await
@@ -387,10 +423,6 @@ impl AuthService {
             Err(err) => return Err(err),
         };
 
-        if account.is_offline() && !self.has_microsoft_account().await {
-            return Err(AuthError::OfflineRequiresMicrosoft);
-        }
-
         Ok(account)
     }
 
@@ -524,6 +556,29 @@ mod tests {
         let (events, _rx) = EventBus::channel();
         let net = RequestClient::new(NetConfig::default()).expect("net client");
         (AuthService::with_store(store, net, events), id)
+    }
+
+    #[tokio::test]
+    async fn an_offline_profile_launches_without_a_microsoft_account() {
+        let account = crate::offline::offline_account("NovexOffline".to_string());
+        let id = account.id;
+        let mut store = CredentialsStore::default();
+        store.users.insert(id, account);
+        store.default_user = Some(id);
+
+        let (events, _rx) = EventBus::channel();
+        let net = RequestClient::new(NetConfig::default()).expect("net client");
+        let service = AuthService::with_store(store, net, events);
+
+        let launched_account = service
+            .default_account_for_launch()
+            .await
+            .expect("offline profile should be launchable without Microsoft")
+            .expect("offline profile should be selected as default");
+
+        assert_eq!(launched_account.id, id);
+        assert!(launched_account.is_offline());
+        assert!(launched_account.access_token.is_empty());
     }
 
     #[tokio::test]

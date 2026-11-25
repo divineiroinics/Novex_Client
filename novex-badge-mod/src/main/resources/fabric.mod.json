@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "novex_badges",
+  "version": "${version}",
+  "name": "NOVEX Badges",
+  "description": "Displays verified NOVEX membership badges in player names and the player list.",
+  "authors": [
+    "XIRX"
+  ],
+  "contact": {
+    "homepage": "https://novex-client.vercel.app/",
+    "sources": "https://github.com/divineiroinics/Novex_Client"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "org.xirx.novexbadge.NovexBadgesClient"
+    ]
+  },
+  "mixins": [
+    "novex_badges.client.mixins.json"
+  ],
+  "depends": {
+    "minecraft": "${minecraft_version}",
+    "java": ">=${java_release}"
+  }
+}

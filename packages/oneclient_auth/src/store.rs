@@ -91,10 +91,6 @@ impl CredentialsStore {
     }
 
     fn insert_offline_account(&mut self, username: String) -> AuthResult<MinecraftAccount> {
-        if !self.has_microsoft_account() {
-            return Err(AuthError::OfflineRequiresMicrosoft);
-        }
-
         validate_offline_username(&username)?;
 
         if self
@@ -107,6 +103,13 @@ impl CredentialsStore {
 
         let account = offline_account(username);
         self.users.insert(account.id, account.clone());
+
+        // Match Microsoft account creation: the first profile becomes the
+        // default so a fresh offline install can proceed straight to launch.
+        if self.default_user.is_none() {
+            self.default_user = Some(account.id);
+        }
+
         Ok(account)
     }
 
@@ -205,10 +208,6 @@ impl CredentialsStore {
             return Ok(None);
         };
 
-        if account.is_offline() && !self.has_microsoft_account() {
-            return Err(AuthError::OfflineRequiresMicrosoft);
-        }
-
         Ok(Some(account))
     }
 }
@@ -221,4 +220,36 @@ pub(crate) fn is_transient_auth_error(err: &AuthError) -> bool {
         AuthError::Minecraft(crate::error::MinecraftAuthError::RequestError { source, .. })
             if source.is_connect() || source.is_timeout()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offline_profiles_can_be_added_without_microsoft() {
+        let mut store = CredentialsStore::default();
+        let account = store
+            .insert_offline_account("NovexPlayer".to_string())
+            .expect("offline profile should not require Microsoft sign-in");
+
+        assert!(account.is_offline());
+        assert!(!store.has_microsoft_account());
+    }
+
+    #[tokio::test]
+    async fn offline_profile_can_be_the_default_without_microsoft() {
+        let mut store = CredentialsStore::default();
+        let account = store
+            .insert_offline_account("NovexPlayer".to_string())
+            .expect("offline profile should be created");
+        store.default_user = Some(account.id);
+
+        let default = store
+            .default_account()
+            .await
+            .expect("offline default account should resolve");
+
+        assert_eq!(default.map(|account| account.id), Some(account.id));
+    }
 }

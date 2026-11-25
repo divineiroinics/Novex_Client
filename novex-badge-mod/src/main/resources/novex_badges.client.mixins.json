@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "${mixin_package}",
+  "compatibilityLevel": "${mixin_compatibility}",
+  "client": [
+    "${entity_mixin}",
+    "${player_list_mixin}"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

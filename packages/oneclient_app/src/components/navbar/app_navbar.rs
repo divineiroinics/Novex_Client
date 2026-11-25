@@ -22,7 +22,7 @@ const NAVBAR_INTRO_MS: u64 = 460;
 const LOGO_HIDE_NAVBAR_W: f32 = 1100.;
 const NAVBAR_SIDE_PADDING_PX: f32 = 40.;
 const NAV_LINK_SPACING_PX: f32 = 36.;
-const COMPACT_LOGO_PX: f32 = 32.;
+const COMPACT_LOGO_PX: f32 = 40.;
 
 #[derive(PartialEq)]
 pub struct Navbar;
@@ -92,12 +92,14 @@ fn navbar_left(show_logo: bool, over_art: bool) -> impl IntoElement {
         .maybe(!show_logo, |el| {
             el.padding(Gaps::new(0., NAV_LINK_SPACING_PX, 0., 0.))
         })
-        .child(
-            Icon::new(IconType::IconLogo)
-                .size(COMPACT_LOGO_PX)
-                .color(primary_color(over_art))
-                .into_element(),
-        )
+        .maybe(!show_logo, |rect| {
+            rect.child(
+                Icon::new(IconType::IconLogo)
+                    .size(COMPACT_LOGO_PX)
+                    .color(primary_color(over_art))
+                    .into_element(),
+            )
+        })
         .maybe(show_logo, |rect| {
             rect.child(NavbarLogo { over_art }.into_element())
         })
@@ -128,7 +130,35 @@ struct NavbarLogo {
 
 impl Component for NavbarLogo {
     fn render(&self) -> impl IntoElement {
-        theme::wordmark(214., 44., primary_color(self.over_art))
+        rect()
+            .horizontal()
+            .cross_align(Alignment::Center)
+            .spacing(8.)
+            .child(Icon::new(IconType::IconLogo).size(32.))
+            .child(
+                rect()
+                    .horizontal()
+                    .cross_align(Alignment::Center)
+                    .spacing(0.)
+                    .child(
+                        label()
+                            .text("NOVEX")
+                            .font_family(theme::font())
+                            .font_weight(FontWeight::BOLD)
+                            .font_size(text_size(30.))
+                            .color(theme::colors::danger()),
+                    )
+                    .child(
+                        label()
+                            .text(" Client")
+                            .font_family(theme::font())
+                            .font_weight(FontWeight::BOLD)
+                            .font_size(text_size(30.))
+                            .color(primary_color(self.over_art)),
+                    )
+                    .into_element(),
+            )
+            .into_element()
     }
 }
 

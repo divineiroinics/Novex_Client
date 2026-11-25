@@ -16,7 +16,9 @@ impl NameProblem {
         match self {
             Self::Empty => "Enter a name.",
             Self::TooLong => "Use 20 characters or fewer.",
-            Self::ForbiddenCharacters => "Use only letters, digits, spaces and punctuation (no \\).",
+            Self::ForbiddenCharacters => {
+                "Use only letters, digits, spaces and punctuation (no \\)."
+            }
             Self::NoUsableCharacters => "Include at least one letter or digit.",
         }
     }

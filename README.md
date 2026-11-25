@@ -1,54 +1,36 @@
 <div align="center">
 
-<img src=".github/media/RepoBanner.png" alt="Repository Banner" />
+<img src=".github/media/RepoBanner.png" alt="NOVEX Client repository banner" />
 
-# OneClient  |  OneLauncher
-The monorepo containing the code for OneLauncher, OneClient, and their core backend.
+# NOVEX Client
 
-OneClient is a Minecraft client featuring fully 100% open-source components, offering many packaged and pre-configured mods in one click.
+NOVEX Client is an open-source Minecraft client and launcher maintained and branded by XIRX. It preserves the original launcher experience while bringing together a collection of packaged and pre-configured mods in one application.
 
 </div>
 
 ## Installing
 
-You can install the latest release of OneClient from our website: [https://polyfrost.org/projects/oneclient](https://polyfrost.org/projects/oneclient)
-as well as our [GitHub releases](https://github.com/Polyfrost/OneLauncher/releases/latest).
+The current release target is **Windows (x86_64)**. Installers will be published on the [GitHub Releases page](https://github.com/divineiroinics/Novex_Client/releases) when a signed release has been configured and built.
 
-| Windows (x86_64) | macOS (Intel & Apple Silicon) | Linux (x86_64)                                          |
-|------------------|-------------------------------|---------------------------------------------------------|
-| Installer 🔄      | DMG 🔄                        | AppImage 🔄                                             |
-|                  | App Bundle 🔄                 | DEB                                                     |
-|                  |                               | RPM                                                     |
-|                  |                               | *[RPM (COPR)](https://copr.fedorainfracloud.org/coprs/polyfrost/OneClient/) 🔄 |
-|                  |                               | [AUR](https://aur.archlinux.org/packages/oneclient-bin) |
+macOS and Linux release installers are not currently part of the NOVEX release pipeline. The upstream project supports additional platforms, but those packages should not be treated as NOVEX-supported downloads yet.
 
-> 🔄 = Has support for autoupdating built-in
+### Automatic updates
 
-<details>
+The Windows updater verifies release signatures before installing an update. It remains disabled until the repository's persistent signing key pair is configured; this is a one-time maintainer setup described in [NOVEX release signing](docs/NOVEX-RELEASE-SIGNING.md).
 
-<summary><h3>COPR Installation</h3></summary>
+The first key-enabled release must be downloaded and installed manually by existing users whose current build has no updater public key. Later signed releases can be detected and installed by the in-app updater. Windows Authenticode / SmartScreen publisher signing is separate and is not yet configured.
 
-On supported distributions (RHEL, Fedora, etc.), you can make use of the Fedora COPR instead of using the AppImage or manually installing the RPM file.
-1. First you have to enable the repository:
-```
-sudo dnf copr enable polyfrost/OneClient
-```
-2. Then you can install the package:
-```
-sudo dnf install oneclient-bin
-```
+## Included NOVEX badge mod
 
-</details>
+The Windows release workflow reads the launcher's curated version catalog and dynamically builds and embeds a matching NOVEX badge mod for every listed **stable Fabric** target (currently Minecraft 1.18–1.21.11 and 26+), while retaining the previously shipped 1.21.1, 1.21.4, 1.21.5, and 1.21.8 builds. Windows nightlies also best-effort build the newest Fabric snapshot/RC/pre-release in the legacy 1.x and modern 26+ families, plus the newest modern weekly snapshot. A preview is embedded only when matching Fabric mappings and a loader are available and the current badge source compiles; incompatible previews are skipped without blocking stable builds. Preview support is experimental and is not included in signed releases. Forge, NeoForge, Quilt, and vanilla installations are not covered by this Fabric-only mod. Versions before 1.18 and older weekly snapshot identifiers are not included.
 
 ## Contributing
 
 We welcome contributions! Please read our [contributing guidelines](CONTRIBUTING.md) before getting started.
 
-
 ### Requirements
 
 The project targets **Rust 1.97** or later. You can install Rust via [rustup](https://rustup.rs/).
-
 
 ### Building & Running
 
@@ -60,34 +42,26 @@ cargo run -p oneclient_app
 cargo build -p oneclient_app --release
 ```
 
-
 ### Packaging / Releasing
 
-Installers are produced with [**cargo-packager**](https://github.com/crabnebula-dev/cargo-packager)
-(the standalone bundler spun out of the Tauri bundler). Config lives in
-[`packages/oneclient_app/Cargo.toml`](./packages/oneclient_app/Cargo.toml) under
-`[package.metadata.packager]`.
+Installers are produced with [**cargo-packager**](https://github.com/crabnebula-dev/cargo-packager). Configuration lives in [`packages/oneclient_app/Cargo.toml`](./packages/oneclient_app/Cargo.toml) under `[package.metadata.packager]`.
 
 ```sh
-cargo install cargo-packager --locked
+cargo install cargo-packager --version 0.11.8 --locked
 
 # Build the binary, then bundle it for the current OS:
 cargo build --release -p oneclient_app
-cargo packager --release -p oneclient_app --formats <targets>
-#   Windows: nsis      macOS: app,dmg      Linux: deb,appimage
+cargo packager --release -p oneclient_app --formats nsis
 ```
 
+The GitHub Actions release workflow currently packages Windows NSIS installers only. A release requires the updater signing secrets and public-key variable documented in [NOVEX release signing](docs/NOVEX-RELEASE-SIGNING.md).
 
 ### Versioning
 
 The workspace shares a single version, defined in the root [`Cargo.toml`](./Cargo.toml) under `[workspace.package]`.
 
-Versions and release notes come from [Knope](https://knope.tech) change files in [`.changeset/`](./.changeset).
-Add one per user-facing change with `knope document-change` (installed via `cargo install knope`). The
-`OneClient Release Build` workflow consumes them, bumps the version, writes [`CHANGELOG.md`](./CHANGELOG.md),
-and uses the new entry as the GitHub release body, which is what the launcher's changelog page shows.
+Versions and release notes come from Knope change files in [`.changeset/`](./.changeset). Add one per user-facing change with `knope document-change` (installed via `cargo install knope`). The release workflow consumes them, bumps the version, writes [`CHANGELOG.md`](./CHANGELOG.md), and uses the new entry as the GitHub release body.
 
+## Original project and license
 
-## Code signing
-
-This program uses free code signing provided by [SignPath.io](https://signpath.io?utm_source=foundation&utm_medium=github&utm_campaign=0install), and a certificate by the [SignPath Foundation](https://signpath.org?utm_source=foundation&utm_medium=github&utm_campaign=0install). We thank them very much to their contributions to OSS software!
+NOVEX Client is a fork of [OneLauncher / OneClient](https://github.com/Polyfrost/OneLauncher), originally developed by Polyfrost and contributors. The original project is licensed under the **GNU General Public License v3.0**. Original copyright notices, author credits, and license terms remain applicable to their respective code. NOVEX branding is maintained separately by XIRX.
