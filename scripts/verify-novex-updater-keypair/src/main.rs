@@ -3,6 +3,13 @@ use cargo_packager::sign::decode_private_key;
 use minisign::PublicKey;
 use std::{env, process};
 
+fn normalize_private_key(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace() && *character != '"')
+        .collect()
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("::error::Could not validate NOVEX updater signing keys: {error}");
@@ -16,10 +23,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let password = env::var("CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD").unwrap_or_default();
     let configured_public_key = env::var("NOVEX_UPDATER_PUBKEY").unwrap_or_default();
 
-    // GitHub secret editors and copy/paste workflows can leave quote wrappers
-    // in the value. Quotes are never valid in minisign's key-file encoding;
-    // remove only those wrappers/noise before decoding. Never log this value.
-    let normalized_private_key = private_key.replace('"', "");
+    // cargo-packager stores this key as one Base64 string. Copy/paste into
+    // GitHub's secret editor can add quote wrappers or line/space whitespace;
+    // neither is part of Base64, so discard it before decoding. Never log it.
+    let normalized_private_key = normalize_private_key(&private_key);
 
     // Decode using the exact cargo-packager library used by the release workflow,
     // then derive the public key cryptographically. Never print or persist the secret.
@@ -41,4 +48,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("NOVEX updater public/private signing key pair matches.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_copy_paste_whitespace_and_quote_wrappers() {
+        let normalized = normalize_private_key("  \"YWJj\nZGVm\"  ");
+        assert_eq!(normalized, "YWJjZGVm");
+    }
 }
