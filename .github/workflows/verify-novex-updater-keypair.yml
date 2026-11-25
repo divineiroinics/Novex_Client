@@ -1,0 +1,34 @@
+name: Verify NOVEX Updater Signing Keys
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          restore-cache: false
+      - name: Derive and verify public key
+        shell: bash
+        env:
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CARGO_PACKAGER_SIGN_PRIVATE_KEY:-}" ]; then
+            echo "::error::Missing CARGO_PACKAGER_SIGN_PRIVATE_KEY repository secret."
+            exit 1
+          fi
+          if [ -z "${NOVEX_UPDATER_PUBKEY:-}" ]; then
+            echo "::error::Missing NOVEX_UPDATER_PUBKEY repository variable."
+            exit 1
+          fi
+          cargo run --quiet --manifest-path scripts/verify-novex-updater-keypair/Cargo.toml

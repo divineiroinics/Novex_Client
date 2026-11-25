@@ -18,3 +18,10 @@ The Windows release workflow requires the public key and private key before buil
 - The private key and password must remain GitHub Actions secrets. The public key is safe to store as a repository Actions variable.
 - Nightly builds remain unsigned and do not auto-update.
 - Windows Authenticode / SmartScreen signing is separate and intentionally not required for the updater signature. It can be added later without changing the updater trust key.
+
+## Verify the configured key pair on GitHub
+
+The repository includes a **Verify NOVEX Updater Signing Keys** Actions workflow. Run it from the Actions tab using the branch that contains this workflow. It derives the public key from the stored private-key secret using cargo-packager 0.11.8. The workflow never prints the private key or password.
+
+If the configured public-key variable does not match, the job fails and prints the derived public key (which is safe to share). Copy that exact value into the repository Actions variable `NOVEX_UPDATER_PUBKEY`, then rerun the verification workflow. Do not change or regenerate the private key to fix a mismatch; keep the existing key pair stable.
+
