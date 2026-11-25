@@ -18,7 +18,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           restore-cache: false
-      - name: Derive and verify public key
+      - name: Derive and verify public key (normalized Base64 secret)
         shell: bash
         env:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
