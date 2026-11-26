@@ -49,7 +49,9 @@ jobs:
             # the new NOVEX build automatically after signing validation.
             if [ "$(git rev-parse HEAD)" != "$before_sync" ]; then
               mkdir -p .changeset
-              cat > .changeset/novex_upstream_sync.md <<'EOF'
+              upstream_sha="$(git rev-parse upstream/main)"
+              changeset=".changeset/novex-upstream-${upstream_sha:0:12}.md"
+              cat > "$changeset" <<'EOF'
           ---
           default: patch
           ---
