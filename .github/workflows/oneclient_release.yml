@@ -42,6 +42,24 @@ jobs:
 
       # Validate signing before consuming changesets, bumping the version, or
       # creating a draft release. A bad secret must not leave a half-release.
+      - name: Verify NOVEX updater signing key pair
+        shell: bash
+        env:
+          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CARGO_PACKAGER_SIGN_PRIVATE_KEY:-}" ]; then
+            echo "::error::Missing CARGO_PACKAGER_SIGN_PRIVATE_KEY repository secret."
+            exit 1
+          fi
+          if [ -z "${NOVEX_UPDATER_PUBKEY:-}" ]; then
+            echo "::error::Missing NOVEX_UPDATER_PUBKEY repository variable."
+            exit 1
+          fi
+          cargo run --quiet --manifest-path scripts/verify-novex-updater-keypair/Cargo.toml
+
       - name: Install Knope
         uses: ./.github/actions/install-cargo-tool
         with:
@@ -180,24 +198,6 @@ jobs:
         with:
           tool: cargo-packager
           version: 0.11.8
-
-      - name: Verify NOVEX updater signing key pair
-        shell: bash
-        env:
-          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
-          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
-          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [ -z "${CARGO_PACKAGER_SIGN_PRIVATE_KEY:-}" ]; then
-            echo "::error::Missing CARGO_PACKAGER_SIGN_PRIVATE_KEY repository secret."
-            exit 1
-          fi
-          if [ -z "${NOVEX_UPDATER_PUBKEY:-}" ]; then
-            echo "::error::Missing NOVEX_UPDATER_PUBKEY repository variable."
-            exit 1
-          fi
-          cargo run --quiet --manifest-path scripts/verify-novex-updater-keypair/Cargo.toml
 
       - name: Build release binary
         shell: bash
