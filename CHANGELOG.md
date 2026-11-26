@@ -1,3 +1,33 @@
+## 2.11.1 (2026-11-26)
+
+### Fixes
+
+- Verify the Windows VC++ runtime bootstrap during installer smoke tests by [divineiroinics](https://github.com/divineiroinics)
+
+- Check for launcher updates after startup by [divineiroinics](https://github.com/divineiroinics)
+
+- Document the supported Windows release scope by [divineiroinics](https://github.com/divineiroinics)
+
+- Fix Windows automatic update publishing by [divineiroinics](https://github.com/divineiroinics)
+
+- Select the newest Windows runtime by numeric version by [divineiroinics](https://github.com/divineiroinics)
+
+- Install the Windows Visual C++ runtime during setup by [divineiroinics](https://github.com/divineiroinics)
+
+- Publish the first signed NOVEX Windows release
+
+- Allow unencrypted updater signing keys by [divineiroinics](https://github.com/divineiroinics)
+
+- Best-effort Fabric preview badge builds by [divineiroinics](https://github.com/divineiroinics)
+
+- Quilt-compatible NOVEX badges by [divineiroinics](https://github.com/divineiroinics)
+
+- Restore the original Wardrobe navigation by [divineiroinics](https://github.com/divineiroinics)
+
+- Build and embed NOVEX badges for all supported Fabric versions by [divineiroinics](https://github.com/divineiroinics)
+
+- Validate NOVEX updater public-key configuration by [divineiroinics](https://github.com/divineiroinics)
+
 ## 2.11.0 (2026-11-15)
 
 ### Features
