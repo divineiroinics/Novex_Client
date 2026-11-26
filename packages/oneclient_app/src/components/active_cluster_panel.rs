@@ -113,13 +113,32 @@ impl Component for ActiveClusterPanel {
                     .font_weight(FontWeight::BOLD)
                     .color(colors::on_art()),
             )
-            .child(
+            .child(if subtitle.starts_with("NOVEX Client") {
+                rect()
+                    .horizontal()
+                    .spacing(7.)
+                    .cross_align(Alignment::Center)
+                    .child(
+                        Icon::new(IconType::IconLogo)
+                            .size(20.)
+                            .color(colors::on_art_secondary()),
+                    )
+                    .child(
+                        label()
+                            .text(subtitle)
+                            .font_size(text_size(16.))
+                            .font_weight(FontWeight::SEMI_BOLD)
+                            .color(colors::on_art_secondary()),
+                    )
+                    .into_element()
+            } else {
                 label()
                     .text(subtitle)
                     .font_size(text_size(16.))
                     .font_weight(FontWeight::SEMI_BOLD)
-                    .color(colors::on_art_secondary()),
-            )
+                    .color(colors::on_art_secondary())
+                    .into_element()
+            })
             .child(
                 rect()
                     .horizontal()
