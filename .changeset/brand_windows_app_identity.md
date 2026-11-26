@@ -1,5 +1,5 @@
 ---
-"default": patch
+default: patch
 ---
 
 # Use the NOVEX application identity
