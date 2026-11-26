@@ -1,5 +1,5 @@
 ---
-"default": patch
+default: patch
 ---
 
 # Publish only the NOVEX-named installer
