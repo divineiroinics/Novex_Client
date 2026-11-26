@@ -1,3 +1,9 @@
+## 2.11.4 (2026-11-26)
+
+### Fixes
+
+- Show the NOVEX mark beside the home-screen launcher identity
+
 ## 2.11.3 (2026-11-26)
 
 ### Fixes
