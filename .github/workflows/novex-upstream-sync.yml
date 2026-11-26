@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: "23 3 * * *"
   push:
-    branches: [novex/rebrand]
+    branches: [main]
     paths:
       - .github/workflows/novex-upstream-sync.yml
 
@@ -25,7 +25,7 @@ jobs:
       - name: Check out NOVEX
         uses: actions/checkout@v4
         with:
-          ref: novex/rebrand
+          ref: main
           fetch-depth: 0
 
       - name: Fetch and merge latest OneLauncher
@@ -36,12 +36,30 @@ jobs:
           git config user.email "novex-sync-bot@users.noreply.github.com"
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
+          before_sync="$(git rev-parse HEAD)"
           if ! git merge-base --is-ancestor upstream/main HEAD; then
             # No -X ours/theirs: conflicts must be reviewed, never silently discarded.
             if ! git merge --no-edit --no-ff upstream/main; then
               git merge --abort || true
               echo "::error::OneLauncher changes conflict with NOVEX. No NOVEX branch was modified; resolve the conflict in a review branch and rerun."
               exit 1
+            fi
+            # A merged upstream change carries a patch changeset. When this
+            # reviewed PR is merged to main, the release workflow can publish
+            # the new NOVEX build automatically after signing validation.
+            if [ "$(git rev-parse HEAD)" != "$before_sync" ]; then
+              mkdir -p .changeset
+              upstream_sha="$(git rev-parse upstream/main)"
+              changeset=".changeset/novex-upstream-${upstream_sha:0:12}.md"
+              cat > "$changeset" <<'EOF'
+          ---
+          default: patch
+          ---
+
+          # Sync the latest OneLauncher changes
+
+          Import the reviewed upstream OneLauncher update while preserving NOVEX branding and updater identity.
+          EOF
             fi
           else
             echo "NOVEX already contains the latest OneLauncher main commit."
@@ -79,7 +97,7 @@ jobs:
         continue-on-error: true
         with:
           token: ${{ secrets.NOVEX_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
-          base: novex/rebrand
+          base: main
           branch: novex/upstream-sync-proposal
           delete-branch: false
           title: "Sync latest OneLauncher updates into NOVEX"
@@ -91,7 +109,7 @@ jobs:
             - Leaves conflicts unresolved for human review; it never uses a blanket ours/theirs conflict strategy.
             - This PR must pass the normal NOVEX build and validation checks before merging.
 
-            The installed NOVEX application is not updated by this workflow directly. This workflow proposes source changes; a successful NOVEX release is still required to distribute them.
+            The installed NOVEX application is not updated by this workflow directly. This workflow proposes source changes against main; a successful signed NOVEX release is still required to distribute them.
           commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
           author: "NOVEX Sync Bot <novex-sync-bot@users.noreply.github.com>"
           committer: "NOVEX Sync Bot <novex-sync-bot@users.noreply.github.com>"
