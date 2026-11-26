@@ -1,5 +1,5 @@
 ---
-"default": patch
+default: patch
 ---
 
 # Set the Minecraft launcher name to NOVEX
