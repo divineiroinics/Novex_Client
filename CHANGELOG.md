@@ -1,3 +1,9 @@
+## 2.11.3 (2026-11-26)
+
+### Fixes
+
+- Complete NOVEX Windows branding and launcher identity
+
 ## 2.11.2 (2026-11-26)
 
 ### Fixes
