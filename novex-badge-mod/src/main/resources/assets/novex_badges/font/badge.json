@@ -1,0 +1,13 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "novex_badges:novex_badge.png",
+      "ascent": 10,
+      "height": 12,
+      "chars": [
+        ""
+      ]
+    }
+  ]
+}

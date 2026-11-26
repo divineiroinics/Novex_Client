@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.polyfrost.OneClient</id>
-  <name>OneClient</name>
+  <id>org.xirx.NOVEXClient</id>
+  <name>NOVEX Client</name>
   <summary>Next-generation open source Minecraft launcher</summary>
-  <developer id="org.polyfrost">
-    <name>Polyfrost Inc.</name>
+  <developer id="org.xirx">
+    <name>XIRX</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
   <description>
-    <p>OneClient is a next-generation open source Minecraft launcher by Polyfrost.</p>
+    <p>NOVEX Client is a next-generation open source Minecraft launcher by XIRX.</p>
   </description>
-  <launchable type="desktop-id">org.polyfrost.OneClient.desktop</launchable>
-  <url type="homepage">https://polyfrost.org/projects/oneclient</url>
-  <url type="bugtracker">https://github.com/Polyfrost/OneLauncher/issues</url>
-  <url type="vcs-browser">https://github.com/Polyfrost/OneLauncher</url>
+  <launchable type="desktop-id">org.xirx.NOVEXClient.desktop</launchable>
+  <url type="homepage">https://github.com/divineiroinics/Novex_Client</url>
+  <url type="bugtracker">https://github.com/divineiroinics/Novex_Client/issues</url>
+  <url type="vcs-browser">https://github.com/divineiroinics/Novex_Client</url>
   <content_rating type="oars-1.1"/>
   <provides>
     <binary>oneclient_app</binary>

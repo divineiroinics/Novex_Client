@@ -1,8 +1,11 @@
 use freya::prelude::*;
+use freya::query::MutationStateData;
 use oneclient_auth::MinecraftAccount;
 
-use crate::components::{Avatar, Button, Icon, IconType, use_microsoft_login};
-use crate::hooks::{try_default_account, use_current_account};
+use crate::components::{Avatar, Button, Icon, IconType, TextInput, use_microsoft_login};
+use crate::hooks::{
+    AddOfflineAccountKeys, try_default_account, use_add_offline_account, use_current_account,
+};
 use crate::i18n::t;
 use crate::routes::Route;
 use crate::theme::{colors, text_size};
@@ -17,6 +20,16 @@ impl Component for OnboardingAccount {
     fn render(&self) -> impl IntoElement {
         let account_query = use_current_account();
         let msa = use_microsoft_login();
+        let offline = use_add_offline_account();
+        let offline_pending = offline.read().state().is_loading();
+        let offline_error = match &*offline.read().state() {
+            MutationStateData::Settled { res: Err(err), .. }
+            | MutationStateData::Loading {
+                res: Some(Err(err)),
+            } => Some(err.to_string()),
+            _ => None,
+        };
+        let offline_username = use_state(|| String::new());
 
         let account = try_default_account(&account_query);
         let has_account = account.is_some();
@@ -33,7 +46,49 @@ impl Component for OnboardingAccount {
                 Some(account) => account_preview(account).into_element(),
                 None => {
                     let start = msa.clone();
-                    sign_in_card(msa.pending, msa.error.clone(), move |_| start.start())
+                    let offline_add = offline.clone();
+                    let offline_name = offline_username.clone();
+                    rect()
+                        .vertical()
+                        .width(Size::fill())
+                        .spacing(14.)
+                        .child(
+                            sign_in_card(msa.pending, msa.error.clone(), move |_| start.start()),
+                        )
+                        .child(
+                            TextInput::new(offline_username)
+                                .placeholder("Offline Minecraft username"),
+                        )
+                        .child(
+                            Button::new()
+                                .secondary()
+                                .large()
+                                .enabled(!offline_pending && !offline_name.peek().trim().is_empty())
+                                .on_press(move |_| {
+                                    let username = offline_name.peek().trim().to_string();
+                                    if !username.is_empty() {
+                                        offline_add.mutate(AddOfflineAccountKeys { username });
+                                    }
+                                })
+                                .text(if offline_pending {
+                                    "Creating offline profile"
+                                } else {
+                                    "Continue Offline"
+                                }),
+                        )
+                        .maybe_child(offline_error.map(|message| {
+                            label()
+                                .text(message)
+                                .font_size(text_size(12.))
+                                .color(colors::danger())
+                                .into_element()
+                        }))
+                        .child(
+                            label()
+                                .text("Choose an offline username. You can connect a Microsoft account later.")
+                                .font_size(text_size(12.))
+                                .color(colors::fg_secondary()),
+                        )
                         .into_element()
                 }
             })

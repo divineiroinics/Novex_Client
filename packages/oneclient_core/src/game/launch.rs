@@ -2,10 +2,11 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use interfrost::api::minecraft::ArgumentType;
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
@@ -24,6 +25,7 @@ use crate::settings::GameSettingsProfile;
 use crate::state::{LauncherServices, LauncherState};
 use oneclient_auth::MinecraftAccount;
 use oneclient_common::paths;
+use oneclient_content::bundles::BUNDLE_APPLY_BUDGET;
 use oneclient_discord::Presence;
 use oneclient_events::{CrashModIssue, CrashRemedy, GroupedProgressSession, LaunchStage};
 use oneclient_mc::{
@@ -48,7 +50,7 @@ pub async fn launch_cluster(
     account: &MinecraftAccount,
     search_for_java: bool,
 ) -> LauncherResult<LaunchedGame> {
-    launch_cluster_with(state, cluster_id, account, search_for_java, None).await
+    launch_cluster_with(state, cluster_id, account, search_for_java, None, None).await
 }
 
 #[tracing::instrument(skip(state, account))]
@@ -58,6 +60,7 @@ pub async fn launch_cluster_with(
     account: &MinecraftAccount,
     search_for_java: bool,
     extra_jvm_arg: Option<&str>,
+    bundle_budget: Option<Duration>,
 ) -> LauncherResult<LaunchedGame> {
     tracing::info!(cluster_id, search_for_java, "launching cluster");
 
@@ -71,7 +74,15 @@ pub async fn launch_cluster_with(
         return Err(GameError::AlreadyRunning(cluster_id).into());
     }
 
-    let result = start(state, cluster_id, account, search_for_java, extra_jvm_arg).await;
+    let result = start(
+        state,
+        cluster_id,
+        account,
+        search_for_java,
+        extra_jvm_arg,
+        bundle_budget,
+    )
+    .await;
 
     if result.is_err() {
         state.games.remove(cluster_id);
@@ -98,6 +109,7 @@ async fn start(
     account: &MinecraftAccount,
     search_for_java: bool,
     extra_jvm_arg: Option<&str>,
+    bundle_budget: Option<Duration>,
 ) -> LauncherResult<LaunchedGame> {
     let events = state.services.events.clone();
     let stage = |s: LaunchStage| {
@@ -218,6 +230,7 @@ async fn start(
             state.bundles.as_ref(),
             Some(&progress),
             &state.services.content(),
+            Some(Instant::now() + bundle_budget.unwrap_or(BUNDLE_APPLY_BUDGET)),
         )
         .await
     {
@@ -315,9 +328,8 @@ async fn start(
     // Stats every library and the asset tree, the same work `plan_downloads`
     // already keeps off the runtime threads. `block_in_place` because
     // `VersionInfo` is not `Clone` and the sweep only reads it
-    let missing = tokio::task::block_in_place(|| {
-        game_files_missing(&version_info, &java.os_arch, updated)
-    });
+    let missing =
+        tokio::task::block_in_place(|| game_files_missing(&version_info, &java.os_arch, updated));
     match missing {
         Ok(true) => {
             tracing::info!(cluster_id, "missing game files; repairing");
@@ -374,10 +386,22 @@ async fn start(
     let mods_in_cluster =
         crate::game::uses_cluster_mods_folder(cluster.mc_loader, loader_version_id, &custom_args);
 
-    if let Err(err) =
-        crate::game::materialize_content(&state.services, &cluster, &cwd, mods_in_cluster).await
+    match crate::game::materialize_content(
+        &state.services,
+        &cluster,
+        &cwd,
+        mods_in_cluster,
+        profile.copy_mod_files.unwrap_or(false),
+    )
+    .await
     {
-        tracing::warn!(cluster_id, error = %err, "failed to materialize cluster content");
+        Ok(()) => {}
+        Err(err @ crate::LauncherError::GameError(GameError::ModCopyFailed(_))) => {
+            return Err(err);
+        }
+        Err(err) => {
+            tracing::warn!(cluster_id, error = %err, "failed to materialize cluster content");
+        }
     }
 
     if !dedicated {
@@ -417,6 +441,7 @@ async fn start(
     )?;
 
     let mods_dir = paths::cluster_mods_dir(&cluster.folder_name)?;
+    install_novex_badge_mod(&cluster, &version.id, &mods_dir, &cwd).await;
     if let Some(arg) = crate::game::mods_folder_argument(
         cluster.mc_loader,
         loader_version_id,
@@ -492,7 +517,7 @@ async fn start(
         .current_dir(&cwd);
 
     let header = format!(
-        "OneClient {} · {} · {version_name} · Java {}\n\n{}\n\n",
+        "NOVEX Client {} · {} · {version_name} · Java {}\n\n{}\n\n",
         env!("CARGO_PKG_VERSION"),
         cluster.name,
         java.major,
@@ -1258,5 +1283,138 @@ mod jvm_arg_tests {
         assert_eq!(jvm_args_with(None, Some("-Da=1")), "-Da=1");
         assert_eq!(jvm_args_with(Some("-Xss2m"), None), "-Xss2m");
         assert_eq!(jvm_args_with(None, None), "");
+    }
+}
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest.iter().copied() {
+        write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    encoded
+}
+
+#[cfg(test)]
+mod novex_badge_hash_tests {
+    use super::sha256_hex;
+
+    #[test]
+    fn sha256_hex_uses_lowercase_hexadecimal() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+}
+
+/// Installs the bundled NOVEX badge mod only where its current build is compatible.
+/// The mod remains inert unless the user accepted the privacy notice for badge lookups.
+async fn install_novex_badge_mod(
+    cluster: &Cluster,
+    minecraft_version: &str,
+    mods_dir: &Path,
+    game_dir: &Path,
+) {
+    let consent_file = game_dir.join("novex-badges-consent.json");
+    if oneclient_common::consent::declined() {
+        if let Err(err) = tokio::fs::remove_file(&consent_file).await {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(error = %err, "could not remove NOVEX badge consent marker");
+                if let Err(write_err) =
+                    tokio::fs::write(&consent_file, br#"{"enabled":false,"policy_version":2}"#)
+                        .await
+                {
+                    tracing::error!(error = %write_err, "could not disable NOVEX badge consent marker");
+                }
+            }
+        }
+    } else if let Err(err) =
+        tokio::fs::write(&consent_file, br#"{"enabled":true,"policy_version":2}"#).await
+    {
+        tracing::warn!(error = %err, "could not write NOVEX badge consent marker");
+    }
+
+    if !matches!(
+        cluster.mc_loader,
+        oneclient_common::domain::GameLoader::Fabric
+            | oneclient_common::domain::GameLoader::Quilt
+    ) {
+        tracing::debug!(
+            loader = ?cluster.mc_loader,
+            minecraft_version,
+            "NOVEX badges are not installed for this loader yet; the bundled badge mod currently supports Fabric and Quilt"
+        );
+        return;
+    }
+
+    let Some((_, mod_bytes)) = crate::novex_badge_mods::MODS
+        .iter()
+        .find(|(version, _)| *version == minecraft_version)
+    else {
+        return;
+    };
+    if mod_bytes.is_empty() {
+        return;
+    }
+    let file_name = format!("novex-badges-0.1.0+mc{minecraft_version}.jar");
+
+    if let Err(err) = tokio::fs::create_dir_all(mods_dir).await {
+        tracing::warn!(error = %err, "could not create the Fabric mods directory for NOVEX badges");
+        return;
+    }
+
+    let destination = mods_dir.join(file_name);
+    let managed_hash_file = mods_dir.join(".novex-badges-managed.sha256");
+    let expected_hash = sha256_hex(mod_bytes);
+
+    match tokio::fs::read(&destination).await {
+        Ok(existing) => {
+            let existing_hash = sha256_hex(&existing);
+            if existing_hash == expected_hash {
+                // Recover the sidecar if a previous install completed but its
+                // metadata write was interrupted.
+                let _ = tokio::fs::write(&managed_hash_file, &expected_hash).await;
+                return;
+            }
+
+            let previously_managed = tokio::fs::read_to_string(&managed_hash_file)
+                .await
+                .is_ok_and(|hash| hash.trim() == existing_hash);
+            if !previously_managed {
+                tracing::warn!(
+                    path = %destination.display(),
+                    "existing NOVEX badge filename was modified or is user-managed; preserving it"
+                );
+                return;
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => {
+            tracing::warn!(path = %destination.display(), error = %err, "could not inspect existing NOVEX badge mod");
+            return;
+        }
+    }
+
+    let temporary = destination.with_extension("jar.tmp");
+    if let Err(err) = tokio::fs::write(&temporary, mod_bytes).await {
+        tracing::warn!(error = %err, "could not stage the NOVEX badge mod");
+        return;
+    }
+
+    if polyio::try_exists(&destination).await.unwrap_or(false) {
+        if let Err(err) = tokio::fs::remove_file(&destination).await {
+            let _ = tokio::fs::remove_file(&temporary).await;
+            tracing::warn!(error = %err, "could not replace the previously managed NOVEX badge mod");
+            return;
+        }
+    }
+
+    if let Err(err) = tokio::fs::rename(&temporary, &destination).await {
+        let _ = tokio::fs::remove_file(&temporary).await;
+        tracing::warn!(error = %err, "could not install the NOVEX badge mod");
+    } else if let Err(err) = tokio::fs::write(&managed_hash_file, &expected_hash).await {
+        tracing::warn!(error = %err, "installed NOVEX badge mod but could not record its managed hash");
+    } else {
+        tracing::info!(path = %destination.display(), "installed or updated NOVEX badge mod");
     }
 }

@@ -12,7 +12,7 @@ use super::{ImportTarget, MigrationDetection, MigrationSource, SourceInstance};
 const IMPORT_EXCLUDE_TOP: &[&str] = &["mods", "logs"];
 
 pub fn old_root() -> Option<PathBuf> {
-    let base = directories::BaseDirs::new().map(|d| d.data_dir().join("OneClient"));
+    let base = directories::BaseDirs::new().map(|d| d.data_dir().join("NOVEX Client"));
 
     let root = match std::env::var("ONECLIENT_V1_DIR") {
         Ok(dir) => PathBuf::from(dir),

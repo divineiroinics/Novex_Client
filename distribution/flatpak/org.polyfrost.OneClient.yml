@@ -1,4 +1,4 @@
-id: org.polyfrost.OneClient
+id: org.xirx.NOVEXClient
 runtime: org.gnome.Platform
 runtime-version: '51'
 sdk: org.gnome.Sdk

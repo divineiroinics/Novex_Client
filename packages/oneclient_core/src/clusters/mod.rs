@@ -17,9 +17,11 @@ pub use loader_update::{
 };
 pub use migrate::apply_remote_migrations;
 pub use modpack::{
-    FlaggedModpack, ModpackCluster, ModpackSource, PreparedModpack, create_modpack_instance,
-    install_modpack_instance, prepare_modpack, repair_modpack_cluster, update_modpack_cluster,
+    FlaggedModpack, ModpackCluster, ModpackSource, PackChoices, PreparedModpack,
+    create_modpack_instance, install_modpack_instance, prepare_modpack, repair_modpack_cluster,
+    update_modpack_cluster,
 };
+pub(crate) use modpack_import::flag_pack_mods;
 pub use modpack_import::{
     ExistingPack, FlaggedPackMod, ImportedModpack, LoaderPlan, PreparedImport,
     has_imported_modpacks, import_modpack_into_cluster, list_imported_modpacks,
@@ -37,7 +39,7 @@ pub use release_migration::{
 pub use reset::{ResetClaim, ResetReport, is_resetting, reset_cluster, reset_unfinished};
 pub use share::{
     ExportMode, ExportOptions, SettingsChoice, SharedCluster, collect_chosen_settings,
-    export_cluster, export_cluster_with, list_setting_files,
+    export_cluster, export_cluster_with, list_embedded_files, list_setting_files,
 };
 pub use unlink_legacy::{SweepReport, unlink_legacy_cluster_content};
 

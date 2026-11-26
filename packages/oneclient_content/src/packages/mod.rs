@@ -29,6 +29,9 @@ pub use dependencies::{
     DependencyResolution, ModInstallTarget, ResolvedDependency, artifact_mod_id,
     find_mod_for_cluster, pick_version, resolve_required, resolves_dependencies,
 };
+pub use dependents::{
+    DependentPackage, DisableImpact, DisableRoot, disable_impact, ensure_cluster_dependencies,
+};
 pub use error::{PackageError, PackageResult};
 pub use file_identity::{FileIdentity, curseforge_fingerprint};
 pub use local_manifest::{
@@ -39,9 +42,6 @@ pub use metadata_cache::{
     CachedPackageMeta, cached_project_detail, fetch_package_meta, get_version_cached,
     read_cached_package_meta,
 };
-pub use dependents::{
-    DependentPackage, DisableImpact, DisableRoot, disable_impact, ensure_cluster_dependencies,
-};
 pub use oneclient_common::domain::{ContentType, GameLoader, HashAlgorithm, ProviderId};
 pub use provider::{PackageProvider, PackageProviderRegistry};
 pub use store::{LiveSync, LocalImportReport, PackageStore};
@@ -49,5 +49,5 @@ pub use types::*;
 pub use updates::{
     BrowserPackageUpdate, BrowserUpdateCheck, apply_browser_package_update,
     cached_browser_package_updates, check_browser_package_updates, refresh_browser_package_updates,
-    skip_browser_package_update,
+    refresh_browser_package_updates_for, skip_browser_package_update,
 };

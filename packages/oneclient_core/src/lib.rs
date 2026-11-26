@@ -1,5 +1,11 @@
 #![recursion_limit = "256"]
 
+// Populated by build.rs from every Fabric badge jar staged by CI.
+// Developer builds remain valid without Java/Gradle and simply embed no badge jars.
+pub(crate) mod novex_badge_mods {
+    include!(concat!(env!("OUT_DIR"), "/novex_badge_mods.rs"));
+}
+
 #[cfg(debug_assertions)]
 pub mod dev;
 
@@ -53,7 +59,7 @@ pub use migration::launchers::{
     detect_folder as detect_external_folder, discard_instance_archive, find_unpublished_mods,
     import_instance as import_external_instance, instance_mods_stamp, is_instance_archive,
     open_instance_archive, same_folder as same_external_folder,
-    screen_instances as screen_external_instances, sweep_instance_archives,
+    screen_instances as screen_external_instances, screen_modpack_file, sweep_instance_archives,
 };
 pub use migration::{
     ImportTarget, MigrationDetection, MigrationSource, SourceInstance, detect as detect_migration,
@@ -72,17 +78,17 @@ pub use oneclient_cluster::worlds::{
     delete_world, delete_world_datapack, list_cluster_worlds, list_world_datapacks, world_size,
 };
 pub use oneclient_content::bundles::{
-    ApplyBundleUpdatesResult, Bundle, BundleArchive, BundleError, BundleFile, BundleFileKind,
-    BundleFileType, BundleManifest, BundleOptionalPackage, BundleUpdateCheckResult,
+    ApplyBundleUpdatesResult, BUNDLE_APPLY_BUDGET, Bundle, BundleArchive, BundleError, BundleFile,
+    BundleFileKind, BundleFileType, BundleManifest, BundleOptionalPackage, BundleUpdateCheckResult,
     BundleWithUpdateStatus, BundlesManager, FileUpdateStatus, PendingOptionalMod,
     apply_bundle_updates, apply_bundle_updates_with, check_bundle_updates,
     cluster_has_bundle_content, clusters_sharing_artifact, clusters_sharing_global_folders,
-    delete_artifact, effective_enabled,
-    get_bundles_with_update_status, install_bundle, install_cluster_bundles,
-    install_package_from_bundle, list_cluster_bundle_overrides, on_user_remove_artifact,
-    pending_optional_mods, remove_artifact_from_cluster, resolve_optional_mods,
-    set_artifact_enabled_to, set_bundle_package_enabled, set_bundle_package_opt_in,
-    set_bundle_package_override, set_bundle_package_overrides, skip_optional_mods,
+    delete_artifact, effective_enabled, get_bundles_with_update_status, install_bundle,
+    install_cluster_bundles, install_package_from_bundle, list_cluster_bundle_overrides,
+    on_user_remove_artifact, pending_optional_mods, remove_artifact_from_cluster,
+    resolve_optional_mods, set_artifact_enabled_to, set_bundle_package_enabled,
+    set_bundle_package_opt_in, set_bundle_package_override, set_bundle_package_overrides,
+    skip_optional_mods,
 };
 pub use oneclient_content::packages::LinkedArtifactInfo;
 pub use oneclient_content::packages::dependents::{
@@ -91,7 +97,7 @@ pub use oneclient_content::packages::dependents::{
 pub use oneclient_content::packages::updates::{
     BrowserPackageUpdate, BrowserUpdateCheck, apply_browser_package_update,
     cached_browser_package_updates, check_browser_package_updates, refresh_browser_package_updates,
-    skip_browser_package_update,
+    refresh_browser_package_updates_for, skip_browser_package_update,
 };
 pub use oneclient_db::models::SeenStatus;
 pub use oneclient_discord::{DiscordRpc, Presence};

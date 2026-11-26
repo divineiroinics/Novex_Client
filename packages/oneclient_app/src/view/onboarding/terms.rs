@@ -57,10 +57,12 @@ impl Component for OnboardingTerms {
         });
 
         let terms_version = document.as_ref().map(|doc| doc.version).unwrap_or(1);
+        // Bump the accepted privacy version for the NOVEX identity-verification
+        // disclosure below. Keep respecting a newer version published remotely.
         let privacy_version = document
             .as_ref()
-            .map(|doc| doc.privacy_version())
-            .unwrap_or(1);
+            .map(|doc| doc.privacy_version().max(2))
+            .unwrap_or(2);
         let terms_url = document
             .as_ref()
             .map(|doc| doc.terms_url().to_string())
@@ -70,14 +72,23 @@ impl Component for OnboardingTerms {
             .map(|doc| doc.privacy_url().to_string())
             .unwrap_or_else(|| oneclient_common::constants::PRIVACY_URL.to_string());
 
-        let privacy_body = document.as_ref().and_then(|doc| doc.privacy_body());
+        // This disclosure is part of the privacy text shown before acceptance:
+        // Microsoft-authenticated badge verification sends a short-lived
+        // Minecraft Services token to NOVEX's backend for one profile lookup.
+        // Only the returned UUID/username are stored; the token is discarded.
+        let privacy_body = document.as_ref().map(|doc| {
+            format!(
+                "{}\n\n## NOVEX identity and badge verification\n\nWhen you sign in with a Microsoft account after accepting this privacy notice, NOVEX sends your short-lived Minecraft Services access token over HTTPS to NOVEX's verification server to confirm your Minecraft profile. The token is used only for the official Minecraft profile request and is not stored in NOVEX's database or application logs. NOVEX stores the verified Minecraft UUID, current username, and verification timestamp so other NOVEX clients can display your badge. If you decline the privacy notice, identity verification and badge lookups are disabled. When you accept, the Fabric badge mod may send the public Minecraft UUIDs of players whose names it decorates to NOVEX's badge lookup endpoint; it receives only whether a verified badge exists and its public tier. The mod does not send those players' chat, server address, or account tokens. Offline/cracked profiles cannot be verified this way. You can continue using the launcher if badge verification is unavailable.\n",
+                doc.privacy_body().unwrap_or("")
+            )
+        });
         let tabs = privacy_body.is_some().then(|| tab_switcher(tab));
 
         let body = if loading {
             loading_body()
         } else if let Some(document) = document.as_ref() {
             match (*tab.read(), privacy_body) {
-                (LegalTab::Privacy, Some(privacy)) => markdown_body(privacy),
+                (LegalTab::Privacy, Some(privacy)) => markdown_body(&privacy),
                 _ => markdown_body(&document.terms),
             }
         } else {
@@ -109,7 +120,7 @@ impl Component for OnboardingTerms {
         let accept_next = next.clone();
         let nav = terms_nav(
             back,
-            !loading,
+            !loading && document.is_some(),
             move || {
                 accept_dispatch.accept_tos(terms_version, privacy_version);
                 let _ = RouterContext::get().replace(accept_next.clone());

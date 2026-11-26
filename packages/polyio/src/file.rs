@@ -495,11 +495,7 @@ pub async fn copy_dir(src: &Path, dst: &Path, exclude_top: &[&str]) -> PolyIORes
 }
 
 #[tracing::instrument(level = "debug", skip(exclude_top))]
-pub async fn copy_dir_replacing(
-    src: &Path,
-    dst: &Path,
-    exclude_top: &[&str],
-) -> PolyIOResult<()> {
+pub async fn copy_dir_replacing(src: &Path, dst: &Path, exclude_top: &[&str]) -> PolyIOResult<()> {
     copy_dir_inner(src, dst, exclude_top, true).await
 }
 

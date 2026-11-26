@@ -21,7 +21,11 @@ VSWHERE = Path(
 )
 CRT_GLOB = r"VC\Redist\MSVC\**\x64\Microsoft.VC*.CRT\*.dll"
 
-SECTION_REPLACEMENT = """; >>> VC_REDIST_SECTION >>>
+# App-local Microsoft CRT DLLs are bundled beside the executable. Avoid a
+# machine-wide redistributable install so per-user setup never needs elevation.
+SECTION_REPLACEMENT = r"""; >>> VC_REDIST_SECTION >>>
+; App-local Microsoft CRT DLLs are bundled beside the executable.
+; No machine-wide redistributable install is required.
 ; <<< VC_REDIST_SECTION <<<"""
 
 
@@ -51,7 +55,22 @@ def find_crt_dir() -> Path:
     if not dirs:
         sys.exit(f"error: vswhere found no DLLs matching {CRT_GLOB}")
 
-    newest = sorted(dirs, key=lambda p: p.parts)[-1]
+    def redist_version(path: Path) -> tuple[int, ...]:
+        # The directory is nested below a version such as 14.50.35717.
+        # Sorting full paths lexicographically misorders versions (for example,
+        # 14.9 can sort after 14.50), potentially bundling an older CRT.
+        for part in path.parts:
+            if re.fullmatch(r"\d+(?:\.\d+){2,}", part):
+                return tuple(int(component) for component in part.split("."))
+        return ()
+
+    versions = {path: redist_version(path) for path in dirs}
+    if any(not version for version in versions.values()):
+        missing = [str(path) for path, version in versions.items() if not version]
+        sys.exit("error: could not parse a Visual C++ redist version from: " + ", ".join(missing))
+
+    newest = max(dirs, key=lambda path: (versions[path], str(path).casefold()))
+    print(f"CRT redist version: {'.'.join(map(str, versions[newest]))}")
     print(f"CRT redist dir: {newest}")
     return newest
 
@@ -92,9 +111,12 @@ def patch(cargo_toml: Path, dlls: list[Path]) -> None:
     )
 
     text = REGION_RES.sub(lambda _: block, text, count=1)
-    text = REGION_SEC.sub(lambda _: SECTION_REPLACEMENT, text, count=1)
+    # Cargo.toml uses TOML basic strings: escape NSIS path separators for
+    # valid TOML while preserving the single backslashes NSIS needs after parsing.
+    escaped_section = SECTION_REPLACEMENT.replace("\\", "\\\\")
+    text = REGION_SEC.sub(lambda _: escaped_section, text, count=1)
     cargo_toml.write_text(text, encoding="utf-8")
-    print(f"patched {cargo_toml} with {len(dlls)} app-local CRT DLLs")
+    print(f"patched {cargo_toml} with {len(dlls)} app-local CRT DLLs and enabled VC++ bootstrap")
 
 
 def main() -> None:

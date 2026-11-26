@@ -141,6 +141,15 @@ fn can_self_update() -> bool {
 }
 
 fn check_for_update() -> anyhow::Result<Option<Update>> {
+    // Do not install unsigned or differently-signed NOVEX releases. Configure
+    // the NOVEX minisign public key once the release signing secret is provisioned.
+    if UPDATER_ENDPOINT.is_empty() || UPDATER_PUBKEY.is_empty() {
+        tracing::warn!(
+            "automatic updates are disabled until the NOVEX release signing key is configured"
+        );
+        return Ok(None);
+    }
+
     let current = env!("CARGO_PKG_VERSION").parse()?;
     let config = Config {
         endpoints: vec![UPDATER_ENDPOINT.parse()?],

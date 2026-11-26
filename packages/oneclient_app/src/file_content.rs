@@ -164,7 +164,7 @@ mod tests {
             "my pack",
             "oneclient_app",
         );
-        assert!(entry.contains(r#"Exec="/opt/One Client/oneclient_app" --launch "my pack""#));
+        assert!(entry.contains(r#"Exec="/opt/NOVEX Client/oneclient_app" --launch "my pack""#));
     }
 
     #[test]
@@ -174,7 +174,7 @@ mod tests {
             "oneclient",
             "oneclient_app",
         );
-        assert!(entry.contains(r#"Exec="/opt/One Client/oneclient_app" %u"#));
+        assert!(entry.contains(r#"Exec="/opt/NOVEX Client/oneclient_app" %u"#));
         assert!(entry.contains("MimeType=x-scheme-handler/oneclient;"));
     }
 

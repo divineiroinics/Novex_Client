@@ -17,10 +17,9 @@ use oneclient_events::EventBus;
 use oneclient_net::RequestError;
 
 pub use models::{
-    BlockedPlayer, Friend, FriendRequest, GroupKind, GroupMessage, GroupSummary,
-    IncomingSessionInvite, LastMessage,
-    MAX_MESSAGE_LENGTH, MAX_PAGE_SIZE, MAX_RESOLVE_BATCH, PlayerStatus, RelationshipKind,
-    ResolvedPlayer, SessionInvite,
+    BlockedPlayer, CursorPage, Friend, FriendRequest, GroupKind, GroupMessage, GroupSummary,
+    IncomingSessionInvite, LastMessage, MAX_MESSAGE_LENGTH, MAX_PAGE_SIZE, MAX_RESOLVE_BATCH,
+    PlayerStatus, RelationshipKind, ResolvedPlayer, SessionInvite,
 };
 pub use packets::ClientboundPacket;
 

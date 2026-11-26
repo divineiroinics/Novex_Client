@@ -1,0 +1,47 @@
+name: NOVEX Auth Integration Check
+
+on:
+  push:
+    branches: [novex/rebrand]
+    paths:
+      - "packages/oneclient_auth/**"
+      - "packages/oneclient_net/**"
+      - "packages/oneclient_common/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/novex-auth-check.yml"
+      - ".github/actions/setup-rust/**"
+  pull_request:
+    paths:
+      - "packages/oneclient_auth/**"
+      - "packages/oneclient_net/**"
+      - "packages/oneclient_common/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/novex-auth-check.yml"
+      - ".github/actions/setup-rust/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: novex-auth-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          save-cache: true
+          restore-cache: true
+          cache-namespace: auth-check-cache
+      - name: Check Microsoft authentication crate
+        run: cargo check --locked -p oneclient_auth
+
+      - name: Test offline-first account creation
+        run: cargo test --locked -p oneclient_auth offline_

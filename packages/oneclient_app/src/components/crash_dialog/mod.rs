@@ -12,11 +12,11 @@ use crate::Route;
 use crate::components::upload_mclogs::UploadToMclogs;
 use crate::components::{Button, Icon, IconType, OVERLAY_BASE_LEVEL, OverlayPopup, ScrollArea};
 use crate::hooks::{use_cluster, use_dispatch, use_link_confirm, use_log_action, use_upload_log};
-use crate::view::app::cluster::logs::{Confirm, confirm_overlay};
 use crate::i18n::{t, tf};
 use crate::theme;
 use crate::theme::{colors, rounded, text_size};
 use crate::utils::format_durations;
+use crate::view::app::cluster::logs::{Confirm, confirm_overlay};
 
 mod markup;
 mod mods;
@@ -108,13 +108,9 @@ impl Component for CrashDialog {
                             .child(actions(&crash, dispatch, log_path.clone(), upload_confirm)),
                     ),
             )
-            .maybe_child(
-                (*upload_confirm.read())
-                    .zip(log_path)
-                    .map(|(kind, path)| {
-                        confirm_overlay(kind, upload_confirm, action, upload, path).into_element()
-                    }),
-            )
+            .maybe_child((*upload_confirm.read()).zip(log_path).map(|(kind, path)| {
+                confirm_overlay(kind, upload_confirm, action, upload, path).into_element()
+            }))
     }
 }
 
