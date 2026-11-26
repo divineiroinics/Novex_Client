@@ -40,6 +40,8 @@ jobs:
         with:
           restore-cache: false
 
+      # Validate signing before consuming changesets, bumping the version, or
+      # creating a draft release. A bad secret must not leave a half-release.
       - name: Install Knope
         uses: ./.github/actions/install-cargo-tool
         with:
