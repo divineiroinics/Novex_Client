@@ -36,12 +36,28 @@ jobs:
           git config user.email "novex-sync-bot@users.noreply.github.com"
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
+          before_sync="$(git rev-parse HEAD)"
           if ! git merge-base --is-ancestor upstream/main HEAD; then
             # No -X ours/theirs: conflicts must be reviewed, never silently discarded.
             if ! git merge --no-edit --no-ff upstream/main; then
               git merge --abort || true
               echo "::error::OneLauncher changes conflict with NOVEX. No NOVEX branch was modified; resolve the conflict in a review branch and rerun."
               exit 1
+            fi
+            # A merged upstream change carries a patch changeset. When this
+            # reviewed PR is merged to main, the release workflow can publish
+            # the new NOVEX build automatically after signing validation.
+            if [ "$(git rev-parse HEAD)" != "$before_sync" ]; then
+              mkdir -p .changeset
+              cat > .changeset/novex_upstream_sync.md <<'EOF'
+          ---
+          default: patch
+          ---
+
+          # Sync the latest OneLauncher changes
+
+          Import the reviewed upstream OneLauncher update while preserving NOVEX branding and updater identity.
+          EOF
             fi
           else
             echo "NOVEX already contains the latest OneLauncher main commit."
