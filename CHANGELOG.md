@@ -1,3 +1,9 @@
+## 2.11.5 (2026-11-26)
+
+### Fixes
+
+- Restore Minecraft launcher branding
+
 ## 2.11.4 (2026-11-26)
 
 ### Fixes
