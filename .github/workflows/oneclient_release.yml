@@ -392,9 +392,10 @@ jobs:
             cp "${rpm_matches[0]}" "$OUT_DIR/$rpm_unique"
           fi
 
-          # Upload human-facing installers (dmg/renamed deb/renamed rpm/AppImage/signed exe) +
-          # the renamed updater bundle and its .sig. Skip the un-renamed updater bundle to avoid clashes.
-          for f in "$OUT_DIR"/*.dmg ${deb_unique:+"$OUT_DIR/$deb_unique"} ${rpm_unique:+"$OUT_DIR/$rpm_unique"} "$OUT_DIR"/*.AppImage "$OUT_DIR"/*-setup.exe "$OUT_DIR/$unique" "$OUT_DIR/$unique.sig"; do
+          # Upload only NOVEX-named installers and the renamed signed updater bundle.
+          # Do not publish cargo-packager's raw *-setup.exe (it retains the upstream
+          # oneclient_app filename); the NOVEX-named copy above is the user-facing installer.
+          for f in "$OUT_DIR"/*.dmg ${deb_unique:+"$OUT_DIR/$deb_unique"} ${rpm_unique:+"$OUT_DIR/$rpm_unique"} "$OUT_DIR"/*.AppImage "$OUT_DIR/$unique" "$OUT_DIR/$unique.sig"; do
             [ -e "$f" ] || continue
             gh release upload "$TAG" "$f" --clobber
           done
