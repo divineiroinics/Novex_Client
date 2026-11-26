@@ -1,3 +1,15 @@
+## 2.11.2 (2026-11-26)
+
+### Fixes
+
+- Use the NOVEX application identity by [divineiroinics](https://github.com/divineiroinics)
+
+- Set the Minecraft launcher name to NOVEX
+
+- Publish only the NOVEX-named installer
+
+- Use the supplied NOVEX emblem by [divineiroinics](https://github.com/divineiroinics)
+
 ## 2.11.1 (2026-11-26)
 
 ### Fixes
