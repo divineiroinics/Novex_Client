@@ -1,6 +1,12 @@
 name: NOVEX Client Release Build
 
 on:
+  # Approved upstream-sync PRs and other changesets merged to main publish a
+  # signed NOVEX release automatically. Keep manual dispatch for recovery.
+  push:
+    branches: [main]
+    paths:
+      - ".changeset/*.md"
   workflow_dispatch:
 
 # NOTE: CARGO_PACKAGER_SIGN_PRIVATE_KEY* are deliberately NOT declared at
