@@ -429,7 +429,8 @@ fn parse_java_argument(
         .replace("${launcher_name}", "Novex Client")
         .replace("${launcher_version}", env!("CARGO_PKG_VERSION"))
         .replace("${version_name}", version)
-        .replace("${classpath}", classpaths))
+        .replace("${classpath}", classpaths)
+        .replace("${launcher_name}", "Novex Client"))
 }
 
 pub fn classpaths(
@@ -599,9 +600,25 @@ mod tests {
     use super::{
         HashMap, Library, Path, SidedDataEntry, ZGC_MIN_HEAP_MB, append_profile_game_arguments,
         classpaths, drop_repeated_arguments, get_library, is_collector_flag, java_arguments,
-        minecraft_arguments, performance_flags, processor_arguments, split_custom_args,
+        minecraft_arguments, parse_java_argument, performance_flags, processor_arguments,
+        split_custom_args,
     };
     use oneclient_common::Resolution;
+
+    #[test]
+    fn minecraft_launcher_name_placeholder_uses_novex_branding() {
+        let dir = std::env::temp_dir();
+        let parsed = parse_java_argument(
+            "${launcher_name}".to_string(),
+            &dir,
+            &dir,
+            "/libs",
+            "1.21.1",
+        )
+        .unwrap();
+
+        assert_eq!(parsed, "Novex Client");
+    }
 
     #[test]
     fn blank_input_contributes_nothing() {
