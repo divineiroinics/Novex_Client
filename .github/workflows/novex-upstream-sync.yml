@@ -87,14 +87,14 @@ jobs:
           path = "Cargo.toml"
           novex_manifest = show(base, path)
           upstream_manifest = show("upstream/main", path)
-          section_pattern = re.compile(r"(?ms)^\\[workspace\\.package\\]\\n(.*?)(?=^\\[|\\Z)")
+          section_pattern = re.compile(r"(?ms)^\[workspace\.package\]\n(.*?)(?=^\[|\Z)")
           novex_section = section_pattern.search(novex_manifest).group(1)
           upstream_match = section_pattern.search(upstream_manifest)
           upstream_section = upstream_match.group(1)
           for key in ("documentation", "homepage", "repository", "version"):
-              value = re.search(rf'(?m)^{key}\\s*=\\s*"([^"]*)"', novex_section).group(1)
+              value = re.search(rf'(?m)^{key}\s*=\s*"([^"]*)"', novex_section).group(1)
               upstream_section = re.sub(
-                  rf'(?m)^{key}\\s*=\\s*"[^"]*"',
+                  rf'(?m)^{key}\s*=\s*"[^"]*"',
                   f'{key} = "{value}"',
                   upstream_section,
                   count=1,
@@ -118,7 +118,7 @@ jobs:
                       merge_missing(target[key], value)
 
           merge_missing(novex_json, upstream_json)
-          Path(path).write_text(json.dumps(novex_json, ensure_ascii=False, indent=2) + "\\n")
+          Path(path).write_text(json.dumps(novex_json, ensure_ascii=False, indent=2) + "\n")
           PY
                 git add Cargo.toml Cargo.lock packages/oneclient_app/lang/en_us.json
                 if ! git diff --cached --quiet; then
