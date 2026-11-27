@@ -83,7 +83,7 @@ jobs:
                 fi
                 git checkout "$before_sync" -- .github/workflows
                 git add -A .github/workflows
-                if [ -n "$(git diff --name-only "$before_sync" HEAD -- .github/workflows)" ]; then
+                if [ -n "$(git diff --cached --name-only "$before_sync" -- .github/workflows)" ]; then
                   echo "::error::The upstream proposal still changes NOVEX workflow files."
                   exit 1
                 fi
