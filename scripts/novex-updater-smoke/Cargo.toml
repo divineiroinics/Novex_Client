@@ -8,3 +8,4 @@ publish = false
 
 [dependencies]
 cargo-packager-updater = "=0.2.3"
+semver = "1"
