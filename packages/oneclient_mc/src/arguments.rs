@@ -429,8 +429,7 @@ fn parse_java_argument(
         .replace("${launcher_name}", "Novex Client")
         .replace("${launcher_version}", env!("CARGO_PKG_VERSION"))
         .replace("${version_name}", version)
-        .replace("${classpath}", classpaths)
-        .replace("${launcher_name}", "Novex Client"))
+        .replace("${classpath}", classpaths))
 }
 
 pub fn classpaths(
