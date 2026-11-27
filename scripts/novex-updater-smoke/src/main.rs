@@ -1,6 +1,7 @@
 use std::{env, error::Error};
 
-use cargo_packager_updater::{check_update, semver::Version, Config, WindowsConfig};
+use cargo_packager_updater::{check_update, Config, WindowsConfig};
+use semver::Version;
 
 const ENDPOINT: &str =
     "https://github.com/divineiroinics/Novex_Client/releases/latest/download/latest.json";
