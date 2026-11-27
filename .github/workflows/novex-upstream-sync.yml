@@ -70,6 +70,13 @@ jobs:
                   esac
                 done <<< "$conflict_files"
 
+                # Keep NOVEX's complete CI/workflow directory. The upstream
+                # workflows are not needed for the client build, and GitHub's
+                # default token cannot push new workflow definitions without
+                # a separately provisioned Workflows-scoped token.
+                git checkout "$before_sync" -- .github/workflows
+                git add .github/workflows
+
                 python - "$before_sync" <<'PY'
           import json
           import re
@@ -199,6 +206,7 @@ jobs:
             - Non-conflicting upstream files are imported.
             - Conflicting source files are retained from NOVEX for safety; their upstream changes are deferred for manual merging.
             - The root manifest imports upstream dependencies while retaining NOVEX repository identity/version, and English translations merge missing upstream keys.
+            - NOVEX GitHub workflows are retained; upstream workflow definitions are excluded from the client sync.
             - This PR is not auto-merged and must pass Windows build validation before merging.
 
             Files that had overlapping edits:
