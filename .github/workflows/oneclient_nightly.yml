@@ -85,6 +85,9 @@ jobs:
           # so a shared cache would just thrash between the two.
           cache-namespace: nightly-cache
 
+      - name: Test Minecraft launch argument handling
+        run: cargo test -p oneclient_mc --lib
+
       - name: (Linux) Install system dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
