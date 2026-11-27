@@ -1,3 +1,9 @@
+## 2.11.6 (2026-11-27)
+
+### Fixes
+
+- Keep the Minecraft launcher-name substitution covered by the existing regression test without applying it twice.
+
 ## 2.11.5 (2026-11-26)
 
 ### Fixes
