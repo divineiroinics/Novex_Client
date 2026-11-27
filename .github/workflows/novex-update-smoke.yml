@@ -1,6 +1,7 @@
 name: NOVEX Installed-Version Update Smoke Test
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["NOVEX Client Release Build"]
     types: [completed]
