@@ -18,7 +18,7 @@ macOS and Linux release installers are not currently part of the NOVEX release p
 
 The Windows updater verifies release signatures before installing an update. The persistent NOVEX updater key pair is configured in GitHub Actions and the public key is embedded in signed release builds. The release workflow signs each installer, publishes its signature in `latest.json`, and validates the manifest before making the release latest. See [NOVEX release signing](docs/NOVEX-RELEASE-SIGNING.md) for key management.
 
-Users upgrading from an older build that does not contain the NOVEX updater public key must install 2.11.5 manually once. Subsequent signed releases can be detected and installed by the in-app updater. Windows Authenticode / SmartScreen publisher signing is separate and is not yet configured. The signed update pipeline is in place; a full installed-version-to-installed-version update test is still pending.
+Users upgrading from an older build that does not contain the NOVEX updater public key must install 2.11.5 manually once. A Windows CI smoke test has since installed 2.11.5, downloaded the signed 2.11.6 update, verified its signature, ran the installer, and confirmed that the installed executable changed. Automatic installation during normal launcher startup is a separate change scheduled for 2.11.7; Windows Authenticode / SmartScreen publisher signing is also separate and is not yet configured.
 
 ## Included NOVEX badge mod
 
