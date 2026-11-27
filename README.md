@@ -10,7 +10,7 @@ NOVEX Client is an open-source Minecraft client and launcher maintained and bran
 
 ## Installing
 
-The current release target is **Windows (x86_64)**. The latest signed Windows release is [NOVEX Client 2.11.7](https://github.com/divineiroinics/Novex_Client/releases/tag/novex-2.11.7). Download the [Windows x86_64 installer](https://github.com/divineiroinics/Novex_Client/releases/download/novex-2.11.7/NOVEX_Client_2.11.7_windows_x86_64.exe) or browse the [GitHub Releases page](https://github.com/divineiroinics/Novex_Client/releases).
+The current release target is **Windows (x86_64)**. The latest signed Windows release is [NOVEX Client 2.11.8](https://github.com/divineiroinics/Novex_Client/releases/tag/novex-2.11.8). Download the [Windows x86_64 installer](https://github.com/divineiroinics/Novex_Client/releases/download/novex-2.11.8/NOVEX_Client_2.11.8_windows_x86_64.exe) or browse the [GitHub Releases page](https://github.com/divineiroinics/Novex_Client/releases).
 
 macOS and Linux release installers are not currently part of the NOVEX release pipeline. The upstream project supports additional platforms, but those packages should not be treated as NOVEX-supported downloads yet.
 
@@ -18,7 +18,7 @@ macOS and Linux release installers are not currently part of the NOVEX release p
 
 The Windows updater verifies release signatures before installing an update. The persistent NOVEX updater key pair is configured in GitHub Actions and the public key is embedded in signed release builds. The release workflow signs each installer, publishes its signature in `latest.json`, and validates the manifest before making the release latest. See [NOVEX release signing](docs/NOVEX-RELEASE-SIGNING.md) for key management.
 
-Users upgrading from an older build that does not contain the NOVEX updater public key must install 2.11.5 (or newer) manually once. A Windows CI smoke test installed 2.11.5, downloaded and verified the signed 2.11.6 update, ran the installer, and confirmed that the installed executable changed. Starting with 2.11.7, the launcher automatically installs verified updates during normal startup. Windows Authenticode / SmartScreen publisher signing is separate and is not configured.
+Users upgrading from an older build that does not contain the NOVEX updater public key must install 2.11.5 (or newer) manually once. A Windows CI smoke test installed 2.11.7, downloaded and verified the signed 2.11.8 update, ran the installer, and confirmed that the installed executable changed. Starting with 2.11.7, the launcher automatically installs verified updates during normal startup. Windows Authenticode / SmartScreen publisher signing is separate and is not configured.
 
 ## Included NOVEX badge mod
 
