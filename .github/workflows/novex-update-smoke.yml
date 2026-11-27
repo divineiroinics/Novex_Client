@@ -56,7 +56,7 @@ jobs:
           $fileName = "NOVEX_Client_{0}_windows_x86_64.exe" -f $env:PREVIOUS_VERSION
           $installer = Join-Path $env:RUNNER_TEMP $fileName
           gh release download $env:PREVIOUS_TAG --repo $env:GITHUB_REPOSITORY --pattern $fileName --dir $env:RUNNER_TEMP
-          $installDir = Join-Path $env:RUNNER_TEMP "novex-update-install"
+          $installDir = 'C:\\novex-update-smoke'
           Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
           $p = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Previous installer exited with $($p.ExitCode)" }
