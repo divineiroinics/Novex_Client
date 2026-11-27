@@ -29,6 +29,7 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch and merge latest OneLauncher
+        id: merge
         shell: bash
         run: |
           set -euo pipefail
@@ -37,16 +38,21 @@ jobs:
           git remote add upstream https://github.com/Polyfrost/OneLauncher.git
           git fetch upstream main
           before_sync="$(git rev-parse HEAD)"
+          conflict_files=""
           if ! git merge-base --is-ancestor upstream/main HEAD; then
-            # No -X ours/theirs: conflicts must be reviewed, never silently discarded.
+            # First try a normal merge. If only overlapping hunks conflict,
+            # retry with -X ours: Git keeps NOVEX's version of those hunks while
+            # still importing all non-conflicting upstream changes. The PR
+            # explicitly lists these files and is never auto-merged.
             if ! git merge --no-edit --no-ff upstream/main; then
+              conflict_files="$(git diff --name-only --diff-filter=U || true)"
               git merge --abort || true
-              echo "::error::OneLauncher changes conflict with NOVEX. No NOVEX branch was modified; resolve the conflict in a review branch and rerun."
-              exit 1
+              if ! git merge --no-edit --no-ff -X ours upstream/main; then
+                git merge --abort || true
+                echo "::error::The upstream merge could not be resolved safely, even with NOVEX-priority conflict hunks."
+                exit 1
+              fi
             fi
-            # A merged upstream change carries a patch changeset. When this
-            # reviewed PR is merged to main, the release workflow can publish
-            # the new NOVEX build automatically after signing validation.
             if [ "$(git rev-parse HEAD)" != "$before_sync" ]; then
               mkdir -p .changeset
               upstream_sha="$(git rev-parse upstream/main)"
@@ -64,6 +70,16 @@ jobs:
           else
             echo "NOVEX already contains the latest OneLauncher main commit."
           fi
+
+          {
+            echo "conflicts<<NOVEX_CONFLICTS"
+            if [ -n "$conflict_files" ]; then
+              printf '%s\n' "$conflict_files"
+            else
+              echo "None"
+            fi
+            echo "NOVEX_CONFLICTS"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Reapply NOVEX branding and updater identity
         run: |
@@ -106,8 +122,11 @@ jobs:
 
             - Imports the latest Polyfrost/OneLauncher main changes.
             - Reapplies the canonical NOVEX branding, package identity, icons, and updater endpoint/key configuration.
-            - Leaves conflicts unresolved for human review; it never uses a blanket ours/theirs conflict strategy.
-            - This PR must pass the normal NOVEX build and validation checks before merging.
+            - Non-conflicting upstream hunks are imported; overlapping conflict hunks are resolved in favor of NOVEX.
+            - This PR is not auto-merged and must pass Windows build validation before merging.
+
+            Files with overlapping conflicts (NOVEX version retained):
+            ${{ steps.merge.outputs.conflicts }}
 
             The installed NOVEX application is not updated by this workflow directly. This workflow proposes source changes against main; a successful signed NOVEX release is still required to distribute them.
           commit-message: "chore: sync OneLauncher upstream and reapply NOVEX branding"
