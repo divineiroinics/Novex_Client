@@ -1,3 +1,10 @@
+## 2.11.7 (2026-11-27)
+
+### Fixes
+
+- Automatically install signed NOVEX updates during launcher startup instead of waiting for a manual install prompt. The Windows release pipeline also exercises the signed installer-to-installer update path.
+- Pin the NOVEX badge build to the published Fabric Loom 1.19.4 release for reproducible clean-runner builds.
+
 ## 2.11.6 (2026-11-27)
 
 ### Fixes
