@@ -12,7 +12,6 @@ import java.util.UUID;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import net.fabricmc.loader.api.FabricLoader;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -78,7 +77,11 @@ public final class BadgeCache {
 
     private static boolean readConsent() {
         try {
-            Path marker = FabricLoader.getInstance().getGameDir().resolve("novex-badges-consent.json");
+            // The launcher starts Minecraft with the selected game directory as its working directory.
+            // Using user.dir keeps this shared code independent of Fabric Loader APIs, so the
+            // same badge lookup and consent logic can run under Quilt and other loaders.
+            Path gameDir = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+            Path marker = gameDir.resolve("novex-badges-consent.json");
             if (!Files.isRegularFile(marker)) return false;
             JsonObject value = JsonParser.parseString(Files.readString(marker)).getAsJsonObject();
             return value.has("enabled") && value.get("enabled").getAsBoolean()
