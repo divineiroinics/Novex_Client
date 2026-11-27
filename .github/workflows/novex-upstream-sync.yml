@@ -70,12 +70,23 @@ jobs:
                   esac
                 done <<< "$conflict_files"
 
-                # Keep NOVEX's complete CI/workflow directory. The upstream
-                # workflows are not needed for the client build, and GitHub's
-                # default token cannot push new workflow definitions without
-                # a separately provisioned Workflows-scoped token.
+                # Keep NOVEX's complete CI/workflow directory. Explicitly
+                # remove upstream-added workflow files as well as resetting
+                # existing ones; checkout alone does not remove paths absent
+                # from the NOVEX tree.
+                new_workflows="$(git diff --name-only --diff-filter=A "$before_sync" HEAD -- .github/workflows)"
+                if [ -n "$new_workflows" ]; then
+                  while IFS= read -r path; do
+                    [ -n "$path" ] || continue
+                    git rm -f -- "$path"
+                  done <<< "$new_workflows"
+                fi
                 git checkout "$before_sync" -- .github/workflows
-                git add .github/workflows
+                git add -A .github/workflows
+                if [ -n "$(git diff --name-only "$before_sync" HEAD -- .github/workflows)" ]; then
+                  echo "::error::The upstream proposal still changes NOVEX workflow files."
+                  exit 1
+                fi
 
                 python - "$before_sync" <<'PY'
           import json
