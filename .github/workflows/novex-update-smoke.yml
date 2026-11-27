@@ -1,0 +1,102 @@
+name: NOVEX Installed-Version Update Smoke Test
+
+on:
+  workflow_run:
+    workflows: ["NOVEX Client Release Build"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-update:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          restore-cache: false
+
+      - name: Find the current and previous signed releases
+        id: releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $releases = @(gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json |
+            Where-Object { -not $_.draft -and -not $_.prerelease } |
+            Sort-Object { [DateTime]$_.published_at })
+          if ($releases.Count -lt 2) {
+            Write-Error "At least two published NOVEX releases are required for an installed-version update test."
+            exit 1
+          }
+          $previous = $releases[-2]
+          $current = $releases[-1]
+          "previous_tag=$($previous.tag_name)" >> $env:GITHUB_OUTPUT
+          "previous_version=$($previous.tag_name -replace '^novex-', '')" >> $env:GITHUB_OUTPUT
+          "current_tag=$($current.tag_name)" >> $env:GITHUB_OUTPUT
+          "current_version=$($current.tag_name -replace '^novex-', '')" >> $env:GITHUB_OUTPUT
+          Write-Host "Testing installed $($previous.tag_name) -> $($current.tag_name)"
+
+      - name: Install the previous signed NOVEX release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_TAG: ${{ steps.releases.outputs.previous_tag }}
+          PREVIOUS_VERSION: ${{ steps.releases.outputs.previous_version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fileName = "NOVEX_Client_{0}_windows_x86_64.exe" -f $env:PREVIOUS_VERSION
+          $installer = Join-Path $env:RUNNER_TEMP $fileName
+          gh release download $env:PREVIOUS_TAG --repo $env:GITHUB_REPOSITORY --pattern $fileName --dir $env:RUNNER_TEMP
+          $installDir = Join-Path $env:RUNNER_TEMP "novex-update-install"
+          Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Previous installer exited with $($p.ExitCode)" }
+          $app = Join-Path $installDir 'oneclient_app.exe'
+          if (-not (Test-Path $app)) { throw "Previous release did not install oneclient_app.exe at $app" }
+          $hash = (Get-FileHash $app -Algorithm SHA256).Hash
+          "NOVEX_SMOKE_INSTALL_DIR=$installDir" >> $env:GITHUB_ENV
+          "NOVEX_SMOKE_OLD_HASH=$hash" >> $env:GITHUB_ENV
+          Write-Host "Previous release installed. SHA256=$hash"
+
+      - name: Run the production updater against the latest signed manifest
+        shell: pwsh
+        env:
+          NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
+          PREVIOUS_VERSION: ${{ steps.releases.outputs.previous_version }}
+          CURRENT_VERSION: ${{ steps.releases.outputs.current_version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:NOVEX_UPDATER_PUBKEY)) {
+            throw 'NOVEX_UPDATER_PUBKEY is not configured.'
+          }
+          if ([version]$env:CURRENT_VERSION -le [version]$env:PREVIOUS_VERSION) {
+            throw "Latest release $env:CURRENT_VERSION is not newer than installed $env:PREVIOUS_VERSION."
+          }
+          cargo run --release --manifest-path scripts/novex-updater-smoke/Cargo.toml -- $env:PREVIOUS_VERSION
+          $app = Join-Path $env:NOVEX_SMOKE_INSTALL_DIR 'oneclient_app.exe'
+          $deadline = (Get-Date).AddMinutes(3)
+          $updated = $false
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 3
+            try {
+              if ((Test-Path $app) -and (Get-FileHash $app -Algorithm SHA256).Hash -ne $env:NOVEX_SMOKE_OLD_HASH) {
+                $updated = $true
+                break
+              }
+            } catch {
+              # NSIS may briefly hold the executable while replacing the installation.
+            }
+          }
+          if (-not $updated) {
+            throw 'The installed NOVEX executable did not change after the signed updater launched the installer.'
+          }
+          Write-Host "Installed executable changed after update: $((Get-FileHash $app -Algorithm SHA256).Hash)"
+          Get-Process oneclient_app -ErrorAction SilentlyContinue | Stop-Process -Force
