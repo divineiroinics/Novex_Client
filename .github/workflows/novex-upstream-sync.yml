@@ -246,7 +246,7 @@ jobs:
         run: |
           set -euo pipefail
           if git ls-remote --exit-code origin refs/heads/novex/upstream-sync-proposal >/dev/null 2>&1; then
-            gh workflow run novex-proposal-validation.yml --ref novex/upstream-sync-proposal
+            gh workflow run novex-proposal-validation.yml --repo "$GITHUB_REPOSITORY" --ref novex/upstream-sync-proposal
           else
             echo "::warning::The proposal branch was not pushed; Windows validation cannot be dispatched."
           fi
