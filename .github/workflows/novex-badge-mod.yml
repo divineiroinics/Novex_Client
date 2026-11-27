@@ -2,7 +2,7 @@ name: NOVEX Badge Mod
 
 on:
   push:
-    branches: [novex/rebrand]
+    branches: [main, novex/rebrand]
     paths:
       - "novex-badge-mod/**"
       - "packages/oneclient_core/build.rs"
