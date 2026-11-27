@@ -440,7 +440,14 @@ async fn start(
         java.major,
     )?;
 
-    let mods_dir = paths::cluster_mods_dir(&cluster.folder_name)?;
+    // Quilt and older Fabric installations use the game directory's ordinary
+    // mods folder. Newer Fabric/Ornithe clusters may redirect mods into the
+    // launcher's per-cluster folder via fabric.modsFolder.
+    let mods_dir = if mods_in_cluster {
+        paths::cluster_mods_dir(&cluster.folder_name)?
+    } else {
+        cwd.join("mods")
+    };
     install_novex_badge_mod(&cluster, &version.id, &mods_dir, &cwd).await;
     if let Some(arg) = crate::game::mods_folder_argument(
         cluster.mc_loader,
