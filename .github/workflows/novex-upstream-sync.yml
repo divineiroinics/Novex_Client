@@ -173,11 +173,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Reapply NOVEX branding and updater identity
+        id: branding
         run: |
           python -m pip install --disable-pip-version-check Pillow
           python scripts/apply-novex-branding.py
 
       - name: Format and validate
+        id: validate
         shell: bash
         run: |
           set -euo pipefail
@@ -233,11 +235,18 @@ jobs:
         run: |
           echo "::warning::The upstream sync branch was prepared, but GitHub blocked automatic PR creation. Enable 'Allow GitHub Actions to create and approve pull requests' or configure NOVEX_SYNC_TOKEN to restore automatic proposal creation."
 
-      # PRs created with GITHUB_TOKEN do not trigger pull_request workflows.
+      # PR checks can be approval-gated for a newly created proposal branch.
       # workflow_dispatch is an allowed GITHUB_TOKEN-triggered event, so run
-      # the same Windows nightly build explicitly against the proposal branch.
+      # the Windows validation explicitly whenever the proposal branch exists.
       - name: Dispatch Windows validation for the upstream proposal
-        if: steps.upstream_pr.outputs.pull-request-operation == 'created' || steps.upstream_pr.outputs.pull-request-operation == 'updated'
+        if: always() && steps.merge.outcome == 'success' && steps.branding.outcome == 'success' && steps.validate.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run novex-proposal-validation.yml --ref novex/upstream-sync-proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code origin refs/heads/novex/upstream-sync-proposal >/dev/null 2>&1; then
+            gh workflow run novex-proposal-validation.yml --ref novex/upstream-sync-proposal
+          else
+            echo "::warning::The proposal branch was not pushed; Windows validation cannot be dispatched."
+          fi
