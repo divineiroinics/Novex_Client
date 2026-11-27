@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - .github/workflows/novex-upstream-sync.yml
+      - novex-badge-mod/**
+      - scripts/build-novex-badge-mods.py
 
 permissions:
   contents: write
