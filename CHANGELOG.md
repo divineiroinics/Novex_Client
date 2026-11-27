@@ -1,3 +1,9 @@
+## 2.11.8 (2026-11-27)
+
+### Fixes
+
+- Fix NOVEX badge installation for Quilt and older Fabric instances by targeting the active game's ordinary `mods` directory when the loader does not use a per-cluster mods folder. Update the installation and compatibility notes for the current signed Windows release.
+
 ## 2.11.7 (2026-11-27)
 
 ### Fixes
