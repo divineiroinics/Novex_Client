@@ -54,13 +54,75 @@ jobs:
                 exit 1
               fi
               if [ -n "$conflict_files" ]; then
+                # Preserve NOVEX's complete versions of source files with
+                # overlapping edits. Merge shared metadata files deliberately:
+                # upstream dependency additions, NOVEX package identity, and
+                # new English translation keys all survive.
                 while IFS= read -r path; do
                   [ -n "$path" ] || continue
-                  git checkout "$before_sync" -- "$path"
-                  git add "$path"
+                  case "$path" in
+                    Cargo.toml|Cargo.lock|packages/oneclient_app/lang/en_us.json)
+                      ;;
+                    *)
+                      git checkout "$before_sync" -- "$path"
+                      git add "$path"
+                      ;;
+                  esac
                 done <<< "$conflict_files"
+
+                python - "$before_sync" <<'PY'
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          base = sys.argv[1]
+
+          def show(ref, path):
+              return subprocess.check_output(["git", "show", f"{ref}:{path}"], text=True)
+
+          # Start with upstream dependency/profile updates, but keep NOVEX's
+          # repository links and independent release version.
+          path = "Cargo.toml"
+          novex_manifest = show(base, path)
+          upstream_manifest = show("upstream/main", path)
+          section_pattern = re.compile(r"(?ms)^\\[workspace\\.package\\]\\n(.*?)(?=^\\[|\\Z)")
+          novex_section = section_pattern.search(novex_manifest).group(1)
+          upstream_match = section_pattern.search(upstream_manifest)
+          upstream_section = upstream_match.group(1)
+          for key in ("documentation", "homepage", "repository", "version"):
+              value = re.search(rf'(?m)^{key}\\s*=\\s*"([^"]*)"', novex_section).group(1)
+              upstream_section = re.sub(
+                  rf'(?m)^{key}\\s*=\\s*"[^"]*"',
+                  f'{key} = "{value}"',
+                  upstream_section,
+                  count=1,
+              )
+          start, end = upstream_match.span(1)
+          Path(path).write_text(upstream_manifest[:start] + upstream_section + upstream_manifest[end:])
+
+          # Regenerate the lockfile from the merged dependency manifest.
+          Path("Cargo.lock").write_text(show("upstream/main", "Cargo.lock"))
+
+          # Keep existing NOVEX translations, but import new upstream keys.
+          path = "packages/oneclient_app/lang/en_us.json"
+          novex_json = json.loads(show(base, path))
+          upstream_json = json.loads(show("upstream/main", path))
+
+          def merge_missing(target, source):
+              for key, value in source.items():
+                  if key not in target:
+                      target[key] = value
+                  elif isinstance(target[key], dict) and isinstance(value, dict):
+                      merge_missing(target[key], value)
+
+          merge_missing(novex_json, upstream_json)
+          Path(path).write_text(json.dumps(novex_json, ensure_ascii=False, indent=2) + "\\n")
+          PY
+                git add Cargo.toml Cargo.lock packages/oneclient_app/lang/en_us.json
                 if ! git diff --cached --quiet; then
-                  git commit -m "chore: preserve NOVEX versions of upstream conflict files"
+                  git commit -m "chore: merge upstream dependencies and translations with NOVEX metadata"
                 fi
               fi
             fi
@@ -102,6 +164,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo fmt --all
+          cargo update --workspace
           test -s branding/novex-mark.png
           test -s packages/oneclient_app/icons/icon.ico
           test -s packages/oneclient_app/icons/icon.icns
@@ -134,10 +197,11 @@ jobs:
             - Imports the latest Polyfrost/OneLauncher main changes.
             - Reapplies the canonical NOVEX branding, package identity, icons, and updater endpoint/key configuration.
             - Non-conflicting upstream files are imported.
-            - Any file with overlapping edits is retained in its complete NOVEX version; its upstream changes are deferred for manual merging.
+            - Conflicting source files are retained from NOVEX for safety; their upstream changes are deferred for manual merging.
+            - The root manifest imports upstream dependencies while retaining NOVEX repository identity/version, and English translations merge missing upstream keys.
             - This PR is not auto-merged and must pass Windows build validation before merging.
 
-            Files retained from NOVEX due to conflicts:
+            Files that had overlapping edits:
             ${{ steps.merge.outputs.conflicts }}
 
             The installed NOVEX application is not updated by this workflow directly. This workflow proposes source changes against main; a successful signed NOVEX release is still required to distribute them.
