@@ -81,9 +81,9 @@ jobs:
                     git rm -f -- "$path"
                   done <<< "$new_workflows"
                 fi
-                git checkout "$before_sync" -- .github/workflows
-                git add -A .github/workflows
-                if [ -n "$(git diff --cached --name-only "$before_sync" -- .github/workflows)" ]; then
+                git checkout "$before_sync" -- .github/workflows novex-badge-mod
+                git add -A .github/workflows novex-badge-mod
+                if [ -n "$(git diff --cached --name-only "$before_sync" -- .github/workflows novex-badge-mod)" ]; then
                   echo "::error::The upstream proposal still changes NOVEX workflow files."
                   exit 1
                 fi
@@ -217,7 +217,7 @@ jobs:
             - Non-conflicting upstream files are imported.
             - Conflicting source files are retained from NOVEX for safety; their upstream changes are deferred for manual merging.
             - The root manifest imports upstream dependencies while retaining NOVEX repository identity/version, and English translations merge missing upstream keys.
-            - NOVEX GitHub workflows are retained; upstream workflow definitions are excluded from the client sync.
+            - NOVEX GitHub workflows and the tested NOVEX badge-mod Gradle project are retained; upstream workflow definitions and incompatible badge build configuration are excluded.
             - This PR is not auto-merged and must pass Windows build validation before merging.
 
             Files that had overlapping edits:
