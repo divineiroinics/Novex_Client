@@ -941,7 +941,11 @@ fn submit_draft(
 }
 
 fn millis_until(until: Option<chrono::DateTime<chrono::FixedOffset>>) -> i64 {
-    until.map_or(0, |until| (until.to_utc() - chrono::Utc::now()).num_milliseconds().max(0))
+    until.map_or(0, |until| {
+        (until.to_utc() - chrono::Utc::now())
+            .num_milliseconds()
+            .max(0)
+    })
 }
 
 /// Rounded up, so it only reaches 0 once the cooldown has actually ended
@@ -1176,7 +1180,14 @@ impl Component for Composer {
                             .placeholder(tf("oneclient.chat.thread.message_placeholder", &[&title]))
                             .on_submit(move |_| {
                                 emoji_open.set(false);
-                                submit_draft(&on_key, draft, editing, group_id, cooling, &sent_by_key);
+                                submit_draft(
+                                    &on_key,
+                                    draft,
+                                    editing,
+                                    group_id,
+                                    cooling,
+                                    &sent_by_key,
+                                );
                             })
                             .key(edit_id),
                     )
@@ -1191,7 +1202,14 @@ impl Component for Composer {
                             .a11y_alt(t("oneclient.chat.common.send"))
                             .on_press(move |_| {
                                 emoji_open.set(false);
-                                submit_draft(&dispatch, draft, editing, group_id, cooling, &sent_by_press);
+                                submit_draft(
+                                    &dispatch,
+                                    draft,
+                                    editing,
+                                    group_id,
+                                    cooling,
+                                    &sent_by_press,
+                                );
                             })
                             .child(
                                 Icon::new(IconType::Send01)
@@ -1280,7 +1298,17 @@ mod tests {
         assert_eq!(format_cooldown(4 * 60 + 59), "4m");
         assert_eq!(format_cooldown(42), "42s");
         assert_eq!(seconds_until(None), 0);
-        assert_eq!(seconds_until(Some(chrono::Utc::now().fixed_offset() - chrono::Duration::hours(1))), 0);
-        assert_eq!(seconds_until(Some(chrono::Utc::now().fixed_offset() + chrono::Duration::milliseconds(300))), 1);
+        assert_eq!(
+            seconds_until(Some(
+                chrono::Utc::now().fixed_offset() - chrono::Duration::hours(1)
+            )),
+            0
+        );
+        assert_eq!(
+            seconds_until(Some(
+                chrono::Utc::now().fixed_offset() + chrono::Duration::milliseconds(300)
+            )),
+            1
+        );
     }
 }

@@ -806,9 +806,11 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].0, renamed);
 
-        let picked =
-            find_blocked_downloads(std::slice::from_ref(&renamed), &[blocked(&sha1, wanted.len() as u64)])
-                .await;
+        let picked = find_blocked_downloads(
+            std::slice::from_ref(&renamed),
+            &[blocked(&sha1, wanted.len() as u64)],
+        )
+        .await;
         assert_eq!(picked.len(), 1);
     }
 }

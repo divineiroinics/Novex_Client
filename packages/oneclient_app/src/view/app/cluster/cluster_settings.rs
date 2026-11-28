@@ -28,6 +28,7 @@ use crate::hooks::{
 use crate::i18n::{t, tf};
 use crate::layout::cluster_content;
 use crate::routes::Route;
+use crate::state::MigrationDirection;
 use crate::theme::{self, colors, rounded, text_size};
 use crate::ui::{border_all_color, centered_note};
 use crate::view::app::clusters::{
@@ -38,7 +39,6 @@ use crate::view::app::launch_syncing;
 use crate::view::app::settings::{
     section_header, settings_row, settings_row_danger, settings_row_disabled,
 };
-use crate::state::MigrationDirection;
 use oneclient_core::clusters::{DirTarget, rank_migration_sources, rank_migration_targets};
 
 use super::cluster_not_found;

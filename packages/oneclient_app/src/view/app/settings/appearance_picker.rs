@@ -554,7 +554,9 @@ impl Component for StyleCard {
         let card = radio.accessibility(card, index, self.selected_index);
         rect()
             .width(Size::flex(1.))
-            .maybe(self.manage, |el| el.on_secondary_down(open_menu_at(menu_at)))
+            .maybe(self.manage, |el| {
+                el.on_secondary_down(open_menu_at(menu_at))
+            })
             .child(radio.keyboard(card, index, key_select))
             .maybe_child(self.manage.then(|| ThemeFileMenu {
                 id: theme.id.clone(),
@@ -633,7 +635,7 @@ fn miniature(theme: &Theme, pixel: bool, dense: bool) -> Element {
         .spacing(6.)
         .child(theme_icon(theme, "icon-logo", 13., palette.text.0))
         .child(
-            text("OneClient", title_size, palette.text.0).font_weight(if pixel {
+            text("NOVEX Client", title_size, palette.text.0).font_weight(if pixel {
                 FontWeight::NORMAL
             } else {
                 FontWeight::BOLD

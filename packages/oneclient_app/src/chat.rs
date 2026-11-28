@@ -922,7 +922,10 @@ mod tests {
 
     #[test]
     fn shortcodes_become_emoji_and_unknown_ones_stay() {
-        assert_eq!(expand_shortcodes("hi :fire: 12:30:45 :nope:"), "hi 🔥 12:30:45 :nope:");
+        assert_eq!(
+            expand_shortcodes("hi :fire: 12:30:45 :nope:"),
+            "hi 🔥 12:30:45 :nope:"
+        );
     }
 
     #[test]

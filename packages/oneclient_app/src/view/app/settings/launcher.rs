@@ -209,7 +209,11 @@ fn launch_behaviour_field(mut selected: State<LaunchBehaviour>) -> impl IntoElem
 fn close_behaviour_field(mut background: State<bool>) -> impl IntoElement {
     let exit = t("oneclient.settings.launcher.close_behaviour.exit");
     let to_background = t("oneclient.settings.launcher.close_behaviour.background");
-    let current = if *background.read() { to_background } else { exit };
+    let current = if *background.read() {
+        to_background
+    } else {
+        exit
+    };
 
     Dropdown::new(current, vec![exit.to_string(), to_background.to_string()])
         .width(Size::px(220.))

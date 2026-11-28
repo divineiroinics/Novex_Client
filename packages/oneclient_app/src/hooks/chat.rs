@@ -302,10 +302,8 @@ async fn refresh_conversations(station: Station) -> bool {
     }
 
     let ticket = next_ticket(&CONVERSATIONS_TICKET);
-    let (first, special) = tokio::join!(
-        client.groups_page(None, GROUPS_PAGE),
-        client.special_chat()
-    );
+    let (first, special) =
+        tokio::join!(client.groups_page(None, GROUPS_PAGE), client.special_chat());
     if owner_of(station) != owner {
         return false;
     }

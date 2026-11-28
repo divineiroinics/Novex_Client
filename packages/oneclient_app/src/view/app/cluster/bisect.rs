@@ -41,7 +41,11 @@ fn banner_button(text: impl Into<String>, primary: bool) -> Button {
         .height(Size::px(34.))
         .font_size(text_size(12.))
         .text(text.into());
-    if primary { button.primary() } else { button.secondary() }
+    if primary {
+        button.primary()
+    } else {
+        button.secondary()
+    }
 }
 
 fn link_button(text: impl Into<String>, icon: IconType) -> Button {
@@ -231,21 +235,30 @@ impl Component for BisectBanner {
                 .horizontal()
                 .spacing(4.)
                 .child(
-                    link_button(t("oneclient.cluster.bisect.manage.open"), IconType::Settings01)
-                        .enabled(idle)
-                        .on_press(move |_| panel.set(Panel::Manage)),
+                    link_button(
+                        t("oneclient.cluster.bisect.manage.open"),
+                        IconType::Settings01,
+                    )
+                    .enabled(idle)
+                    .on_press(move |_| panel.set(Panel::Manage)),
                 )
                 .child(
-                    link_button(t("oneclient.cluster.bisect.results.open"), IconType::CheckCircle)
-                        .on_press(move |_| panel.set(Panel::Results)),
+                    link_button(
+                        t("oneclient.cluster.bisect.results.open"),
+                        IconType::CheckCircle,
+                    )
+                    .on_press(move |_| panel.set(Panel::Results)),
                 )
                 .child(
-                    link_button(t("oneclient.cluster.bisect.history.open"), IconType::ClockRewind)
-                        .on_press(move |_| panel.set(Panel::History)),
+                    link_button(
+                        t("oneclient.cluster.bisect.history.open"),
+                        IconType::ClockRewind,
+                    )
+                    .on_press(move |_| panel.set(Panel::History)),
                 )
                 .child(
-                    link_button(t("oneclient.cluster.bisect.report.copy"), IconType::Copy01).on_press(
-                        move |_| {
+                    link_button(t("oneclient.cluster.bisect.report.copy"), IconType::Copy01)
+                        .on_press(move |_| {
                             let dispatch = dispatch.clone();
                             spawn(async move {
                                 let copied = match bisect_report(cluster_id).await {
@@ -267,8 +280,7 @@ impl Component for BisectBanner {
                                         .send(),
                                 }
                             });
-                        },
-                    ),
+                        }),
                 )
                 .into_element()
         });
@@ -400,16 +412,20 @@ fn banner_text(status: &BisectStatus, game_active: bool) -> (String, String) {
         BisectStage::Halted => (
             t("oneclient.cluster.bisect.halted.title").to_string(),
             match &status.groups {
-                Some((a, b)) if b.is_empty() && !a.is_empty() => {
-                    tf("oneclient.cluster.bisect.halted.single.body", &[&a.join(", ")])
-                }
+                Some((a, b)) if b.is_empty() && !a.is_empty() => tf(
+                    "oneclient.cluster.bisect.halted.single.body",
+                    &[&a.join(", ")],
+                ),
                 _ => t("oneclient.cluster.bisect.halted.body").to_string(),
             },
         ),
         BisectStage::Verifying => (
             format!(
                 "{round}{}",
-                tf("oneclient.cluster.bisect.banner.verifying.title", &[&together])
+                tf(
+                    "oneclient.cluster.bisect.banner.verifying.title",
+                    &[&together]
+                )
             ),
             if game_active {
                 t("oneclient.cluster.bisect.banner.running.playing").to_string()
@@ -433,7 +449,10 @@ fn banner_text(status: &BisectStatus, game_active: bool) -> (String, String) {
                 } else {
                     format!(
                         "{} ",
-                        tf("oneclient.cluster.bisect.banner.running.partner", &[&together])
+                        tf(
+                            "oneclient.cluster.bisect.banner.running.partner",
+                            &[&together]
+                        )
                     )
                 };
                 let part = |role, one, other| {
@@ -492,7 +511,11 @@ fn names_box(title: String, names: &[String]) -> Element {
         .into_element()
 }
 
-fn halted_details(status: &BisectStatus, idle: bool, mutation: UseMutation<BisectMutation>) -> Element {
+fn halted_details(
+    status: &BisectStatus,
+    idle: bool,
+    mutation: UseMutation<BisectMutation>,
+) -> Element {
     let cluster_id = status.cluster_id;
     let mut section = rect().vertical().width(Size::fill()).spacing(8.);
     if let Some((a, b)) = status.groups.as_ref().filter(|(_, b)| !b.is_empty()) {
@@ -502,8 +525,14 @@ fn halted_details(status: &BisectStatus, idle: bool, mutation: UseMutation<Bisec
                 .width(Size::fill())
                 .spacing(8.)
                 .content(Content::Flex)
-                .child(names_box(t("oneclient.cluster.bisect.halted.group_a").to_string(), a))
-                .child(names_box(t("oneclient.cluster.bisect.halted.group_b").to_string(), b)),
+                .child(names_box(
+                    t("oneclient.cluster.bisect.halted.group_a").to_string(),
+                    a,
+                ))
+                .child(names_box(
+                    t("oneclient.cluster.bisect.halted.group_b").to_string(),
+                    b,
+                )),
         );
     }
     if !status.hidden.is_empty() {
@@ -533,7 +562,13 @@ fn halted_details(status: &BisectStatus, idle: bool, mutation: UseMutation<Bisec
                 ScrollArea::new()
                     .width(Size::fill())
                     .height(Size::px(110.))
-                    .child(rect().vertical().width(Size::fill()).spacing(2.).children(lines)),
+                    .child(
+                        rect()
+                            .vertical()
+                            .width(Size::fill())
+                            .spacing(2.)
+                            .children(lines),
+                    ),
             )
             .child(
                 rect()
@@ -610,7 +645,11 @@ fn panel_frame(
                                 .into_element()
                         }))
                         .maybe_child(top)
-                        .child(content.width(Size::fill()).height(Size::window_percent(55.)))
+                        .child(
+                            content
+                                .width(Size::fill())
+                                .height(Size::window_percent(55.)),
+                        )
                         .child(
                             rect()
                                 .horizontal()
@@ -675,10 +714,12 @@ fn manage_panel(
                 .background(colors::danger().with_a(24))
                 .child(
                     label()
-                        .text(tf(
-                            "oneclient.cluster.bisect.manage.unresolvable.line",
-                            &[&broken.name, &broken.missing.join(", ")],
-                        ) + &blocks)
+                        .text(
+                            tf(
+                                "oneclient.cluster.bisect.manage.unresolvable.line",
+                                &[&broken.name, &broken.missing.join(", ")],
+                            ) + &blocks,
+                        )
                         .font_size(text_size(12.))
                         .color(colors::fg_primary()),
                 )
@@ -691,7 +732,9 @@ fn manage_panel(
                                 .secondary()
                                 .small()
                                 .enabled(!busy)
-                                .tooltip(t("oneclient.cluster.bisect.manage.unresolvable.disable.tooltip"))
+                                .tooltip(t(
+                                    "oneclient.cluster.bisect.manage.unresolvable.disable.tooltip",
+                                ))
                                 .on_press(move |_| {
                                     mutation.mutate(BisectAction::Settle {
                                         cluster_id,
@@ -706,7 +749,9 @@ fn manage_panel(
                                 .ghost()
                                 .small()
                                 .enabled(!busy)
-                                .tooltip(t("oneclient.cluster.bisect.manage.unresolvable.ignore.tooltip"))
+                                .tooltip(t(
+                                    "oneclient.cluster.bisect.manage.unresolvable.ignore.tooltip",
+                                ))
                                 .on_press(move |_| {
                                     mutation.mutate(BisectAction::Settle {
                                         cluster_id,
@@ -748,39 +793,44 @@ fn manage_panel(
                     })
                 })
                 .text(choice_label(choice));
-            if selected { button.primary() } else { button.ghost() }.into_element()
+            if selected {
+                button.primary()
+            } else {
+                button.ghost()
+            }
+            .into_element()
         });
         rect()
-                .horizontal()
-                .width(Size::fill())
-                .height(Size::fill())
-                .cross_align(Alignment::Center)
-                .spacing(8.)
-                .padding(Gaps::new_symmetric(6., 10.))
-                .corner_radius(rounded(8.))
-                .background(colors::component_bg())
-                .content(Content::Flex)
-                .child(
-                    rect()
-                        .vertical()
-                        .width(Size::flex(1.))
-                        .child(
-                            label()
-                                .text(m.name.clone())
-                                .font_size(text_size(12.))
-                                .max_lines(1)
-                                .text_overflow(TextOverflow::Ellipsis)
-                                .color(colors::fg_primary()),
-                        )
-                        .child(
-                            label()
-                                .text(m.role.label())
-                                .font_size(text_size(10.))
-                                .color(colors::fg_secondary()),
-                        ),
-                )
-                .child(rect().horizontal().spacing(2.).children(choices))
-                .into_element()
+            .horizontal()
+            .width(Size::fill())
+            .height(Size::fill())
+            .cross_align(Alignment::Center)
+            .spacing(8.)
+            .padding(Gaps::new_symmetric(6., 10.))
+            .corner_radius(rounded(8.))
+            .background(colors::component_bg())
+            .content(Content::Flex)
+            .child(
+                rect()
+                    .vertical()
+                    .width(Size::flex(1.))
+                    .child(
+                        label()
+                            .text(m.name.clone())
+                            .font_size(text_size(12.))
+                            .max_lines(1)
+                            .text_overflow(TextOverflow::Ellipsis)
+                            .color(colors::fg_primary()),
+                    )
+                    .child(
+                        label()
+                            .text(m.role.label())
+                            .font_size(text_size(10.))
+                            .color(colors::fg_secondary()),
+                    ),
+            )
+            .child(rect().horizontal().spacing(2.).children(choices))
+            .into_element()
     };
 
     // The few mods that can't load wrap to any height, so they sit above the list
@@ -788,7 +838,13 @@ fn manage_panel(
         ScrollArea::new()
             .width(Size::fill())
             .max_height(Size::px(160.))
-            .child(rect().vertical().width(Size::fill()).spacing(6.).children(rows))
+            .child(
+                rect()
+                    .vertical()
+                    .width(Size::fill())
+                    .spacing(6.)
+                    .children(rows),
+            )
             .into_element()
     });
 
@@ -810,9 +866,18 @@ fn history_panel(status: &BisectStatus, panel: State<Panel>) -> Element {
         .rev()
         .map(|(index, entry)| {
             let (answer, color) = match entry.answer {
-                BisectAnswer::Broken => (t("oneclient.cluster.bisect.history.broken"), colors::danger()),
-                BisectAnswer::Works => (t("oneclient.cluster.bisect.history.works"), colors::success()),
-                BisectAnswer::Unsure => (t("oneclient.cluster.bisect.history.unsure"), colors::fg_secondary()),
+                BisectAnswer::Broken => (
+                    t("oneclient.cluster.bisect.history.broken"),
+                    colors::danger(),
+                ),
+                BisectAnswer::Works => (
+                    t("oneclient.cluster.bisect.history.works"),
+                    colors::success(),
+                ),
+                BisectAnswer::Unsure => (
+                    t("oneclient.cluster.bisect.history.unsure"),
+                    colors::fg_secondary(),
+                ),
             };
             let kind = match entry.kind {
                 BisectPlanKind::Verification => t("oneclient.cluster.bisect.history.verification"),
@@ -921,7 +986,10 @@ fn conflict_block(title: String, report: &ConflictReport, incomplete: bool) -> E
         if !m.also.is_empty() {
             block = block.child(
                 label()
-                    .text(tf("oneclient.cluster.bisect.results.also", &[&m.also.join(", ")]))
+                    .text(tf(
+                        "oneclient.cluster.bisect.results.also",
+                        &[&m.also.join(", ")],
+                    ))
                     .font_size(text_size(11.))
                     .color(colors::fg_secondary()),
             );
@@ -929,7 +997,10 @@ fn conflict_block(title: String, report: &ConflictReport, incomplete: bool) -> E
         if !m.maybe.is_empty() {
             block = block.child(
                 label()
-                    .text(tf("oneclient.cluster.bisect.results.maybe", &[&m.maybe.join(", ")]))
+                    .text(tf(
+                        "oneclient.cluster.bisect.results.maybe",
+                        &[&m.maybe.join(", ")],
+                    ))
                     .font_size(text_size(11.))
                     .color(colors::fg_secondary()),
             );

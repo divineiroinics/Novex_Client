@@ -163,11 +163,16 @@ fn select_in_file_manager(path: &std::path::Path) -> std::io::Result<()> {
 
 #[cfg(target_os = "macos")]
 fn select_in_file_manager(path: &std::path::Path) -> std::io::Result<()> {
-    let status = std::process::Command::new("open").arg("-R").arg(path).status()?;
+    let status = std::process::Command::new("open")
+        .arg("-R")
+        .arg(path)
+        .status()?;
     if status.success() {
         Ok(())
     } else {
-        Err(std::io::Error::other(format!("open -R exited with {status}")))
+        Err(std::io::Error::other(format!(
+            "open -R exited with {status}"
+        )))
     }
 }
 
@@ -725,7 +730,9 @@ pub mod macos {
 
             let class = objc_getClass(c"WinitApplicationDelegate".as_ptr());
             if class.is_null() {
-                tracing::warn!("winit's app delegate is missing, the Dock icon won't reopen the window");
+                tracing::warn!(
+                    "winit's app delegate is missing, the Dock icon won't reopen the window"
+                );
                 return;
             }
             // Fails only if a future winit implements it itself, which is just as good

@@ -1206,7 +1206,11 @@ impl WebpPlayer {
             || size.height > edge
             || info.compute_min_byte_size() as u64 > oneclient_core::images::MAX_DECODE_ALLOC
         {
-            tracing::warn!("refused to play a {}x{} animated preview", size.width, size.height);
+            tracing::warn!(
+                "refused to play a {}x{} animated preview",
+                size.width,
+                size.height
+            );
             return None;
         }
         let frames = codec.get_frame_count().max(1);

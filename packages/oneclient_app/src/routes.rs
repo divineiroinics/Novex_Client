@@ -24,9 +24,9 @@ use crate::view::{
         },
     },
     onboarding::{
-        OnboardingAccount, OnboardingBundlePicker, OnboardingBundles, OnboardingLanguage, OnboardingLocation,
-        OnboardingMigration, OnboardingPreferences, OnboardingSummary, OnboardingTerms,
-        OnboardingWelcome,
+        OnboardingAccount, OnboardingBundlePicker, OnboardingBundles, OnboardingLanguage,
+        OnboardingLocation, OnboardingMigration, OnboardingPreferences, OnboardingSummary,
+        OnboardingTerms, OnboardingWelcome,
     },
 };
 
@@ -151,9 +151,7 @@ impl Route {
             Route::OnboardingLanguage { .. } => t("oneclient.routes.onboarding_language"),
             Route::OnboardingAccount { .. } => t("oneclient.routes.onboarding_account"),
             Route::OnboardingPreferences { .. } => t("oneclient.routes.onboarding_preferences"),
-            Route::OnboardingBundlePicker { .. } => {
-                t("oneclient.routes.onboarding_bundle_picker")
-            }
+            Route::OnboardingBundlePicker { .. } => t("oneclient.routes.onboarding_bundle_picker"),
             Route::OnboardingBundles { .. } => t("oneclient.routes.onboarding_bundles"),
             Route::OnboardingSummary { .. } => t("oneclient.routes.onboarding_summary"),
             Route::Home { .. } => t("oneclient.routes.home"),

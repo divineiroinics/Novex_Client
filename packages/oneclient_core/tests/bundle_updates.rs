@@ -343,7 +343,10 @@ async fn deleted_mod_is_not_re_added_by_another_bundle() {
         .unwrap();
     oneclient_core::dev::seed_bundle_archive(
         &state,
-        named_manifest(SHARED_BUNDLE, vec![managed_file(true), newly_shipped_file()]),
+        named_manifest(
+            SHARED_BUNDLE,
+            vec![managed_file(true), newly_shipped_file()],
+        ),
     )
     .await
     .unwrap();

@@ -427,8 +427,14 @@ impl JavaService {
 
         match self.events.ask(prompt).await? {
             Some(chosen) if chosen.value => {
-                self.prepare(LEGACY_MACOS_MAX_MAJOR, native_ok, search_system, false, None)
-                    .await
+                self.prepare(
+                    LEGACY_MACOS_MAX_MAJOR,
+                    native_ok,
+                    search_system,
+                    false,
+                    None,
+                )
+                .await
             }
             Some(_) => Ok(runtime),
             None => Err(JavaError::Cancelled),

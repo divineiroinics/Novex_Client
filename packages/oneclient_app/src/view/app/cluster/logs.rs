@@ -282,19 +282,21 @@ impl Component for ClusterLogs {
                 category,
                 dump_button,
             ))
-            .child(rect().width(Size::fill()).height(Size::flex(1.0)).child(
-                LogViewer::new("", viewer_lines)
-                    .numbers(viewer_numbers)
-                    .on_jump(on_jump)
-                    .header(viewer_header(
-                        search,
-                        level,
-                        confirm,
-                        has_log,
-                        upload_path,
-                        search_id,
-                    )),
-            ));
+            .child(
+                rect().width(Size::fill()).height(Size::flex(1.0)).child(
+                    LogViewer::new("", viewer_lines)
+                        .numbers(viewer_numbers)
+                        .on_jump(on_jump)
+                        .header(viewer_header(
+                            search,
+                            level,
+                            confirm,
+                            has_log,
+                            upload_path,
+                            search_id,
+                        )),
+                ),
+            );
 
         cluster_content()
             .child(body.into_element())

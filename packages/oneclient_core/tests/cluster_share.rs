@@ -204,7 +204,8 @@ async fn a_cached_jar_that_changed_on_disk_stays_out_of_the_modrinth_index() {
     let source = state.clusters.create(&global, options).await.unwrap();
 
     let claimed = polyio::sha1_bytes(&jar("original"));
-    common::link_modrinth_cached_jar(&state, source.id, "ChangedVer", &jar("changed"), &claimed).await;
+    common::link_modrinth_cached_jar(&state, source.id, "ChangedVer", &jar("changed"), &claimed)
+        .await;
 
     let scratch = polyio::testing::ScratchDir::new("cluster-share-changed");
     let dest = scratch.path().join("Changed.mrpack");

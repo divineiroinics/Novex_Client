@@ -69,7 +69,9 @@ impl WheelEdgeChain {
     /// A touchpad fling that already settled the stack is still coasting, so neither the
     /// stack nor a list inside it should act on it
     pub fn coasting(&self) -> bool {
-        self.coast_at.peek().is_some_and(|at| at.elapsed() < COAST_GAP)
+        self.coast_at
+            .peek()
+            .is_some_and(|at| at.elapsed() < COAST_GAP)
     }
 }
 

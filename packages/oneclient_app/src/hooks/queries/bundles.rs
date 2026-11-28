@@ -352,7 +352,13 @@ pub fn bundle_plan(
     let in_taken: HashSet<String> = archives
         .iter()
         .filter(|archive| bundle_taken(cluster_id, archive, selected))
-        .flat_map(|archive| archive.manifest.files.iter().map(|file| file.kind.package_id()))
+        .flat_map(|archive| {
+            archive
+                .manifest
+                .files
+                .iter()
+                .map(|file| file.kind.package_id())
+        })
         .collect();
     let overrides = archives
         .iter()

@@ -41,8 +41,7 @@ pub use active_cluster::{
 pub(crate) use actions::listed;
 pub use actions::{
     Actions, AlternativePick, COPIES_REQUEST, ExternalImportJob, NotificationBuilder, PackageCheck,
-    PumpSignal, exporting,
-    modpack_job_running, update_check_running,
+    PumpSignal, exporting, modpack_job_running, update_check_running,
 };
 pub use actions::{
     CloudSignal, add_collaborator, cloud_engine, cloud_sync_signal, forget_deleted_cluster,
@@ -51,7 +50,6 @@ pub use actions::{
 };
 pub use queries::ALL_VERSIONS;
 pub use queries::PackageUpdatesQuery;
-pub(crate) use queries::{take_bundles, turn_on_bundles};
 pub(crate) use queries::use_folder_watch;
 pub use queries::wardrobe;
 pub use queries::{
@@ -100,9 +98,7 @@ pub use queries::{
     use_version_art_gallery, use_version_loaders, use_version_metadata, use_versions, version_list,
     versions_metadata, versions_total,
 };
-pub use queries::{
-    BisectAction, BisectMutation, bisect_report, use_bisect, use_bisect_mutation,
-};
+pub use queries::{BisectAction, BisectMutation, bisect_report, use_bisect, use_bisect_mutation};
 pub use queries::{GraphicsBackendQuery, use_graphics_backend, use_has_game_options};
 pub(crate) use queries::{
     UNCREATED_CLUSTER, bundle_plan, bundle_taken, pkg_key, shared_mod_keys, toggle_keys,
@@ -114,6 +110,7 @@ pub use queries::{
 };
 pub use queries::{external_launchers, use_external_launchers};
 pub use queries::{import_screening, use_import_screening, use_modpack_header};
+pub(crate) use queries::{take_bundles, turn_on_bundles};
 
 use crate::chat::{ChatInbox, ChatRoster, ChatThread};
 use crate::notifications::NotificationSnapshot;

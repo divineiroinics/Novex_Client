@@ -15,10 +15,10 @@ use crate::routes::Route;
 use crate::theme::{colors, rounded, text_size};
 use crate::ui::{border_all_color, centered_note, fixed_grid};
 use crate::utils::bundle_display_name;
+use crate::view::app::cluster::package_manager::make_row;
 use crate::view::app::{
     BUNDLE_CARD_H, BUNDLE_COLUMNS, CellCard, bundle_blurb, cell_card, file_keys, package_names,
 };
-use crate::view::app::cluster::package_manager::make_row;
 use crate::view::onboarding::{
     UNCREATED_CLUSTER, bundle_taken, is_default_file, onboarding_nav, onboarding_slide,
     step_heading, version_chip,
@@ -131,7 +131,11 @@ fn set_member(cluster_id: i64, archive: &BundleArchive, on: bool, next: &mut Has
         return;
     }
     let defaults = file_keys(cluster_id, archive, is_default_file);
-    next.extend(if defaults.is_empty() { visible } else { defaults });
+    next.extend(if defaults.is_empty() {
+        visible
+    } else {
+        defaults
+    });
 }
 
 fn bundle_groups(clusters: &[ClusterBundles]) -> Vec<BundleGroup> {
@@ -243,7 +247,11 @@ fn edit_scope<'a>(
     remembered: &[i64],
 ) -> Vec<&'a Member> {
     let picked = picked_versions(group, selected);
-    let wanted = if picked.is_empty() { remembered } else { &picked };
+    let wanted = if picked.is_empty() {
+        remembered
+    } else {
+        &picked
+    };
     let members: Vec<&Member> = group
         .members
         .iter()
@@ -269,7 +277,13 @@ fn mod_keys(
                 .iter()
                 .find(|cb| cb.cluster.id == *cluster_id)
                 .map_or(&[][..], |cb| &cb.archives[..]);
-            shared_mod_keys(*cluster_id, archives, &archive.manifest.name, package_id, selected)
+            shared_mod_keys(
+                *cluster_id,
+                archives,
+                &archive.manifest.name,
+                package_id,
+                selected,
+            )
         })
         .collect()
 }
@@ -608,7 +622,7 @@ mod tests {
     fn picking_a_bundle_enables_its_defaults_in_every_cluster_and_unpicking_clears_it() {
         let groups = bundle_groups(&catalog());
         assert_eq!(groups.len(), 1);
-        let name = "OneClient 1.21.11 Fabric [SkyBlock]";
+        let name = "NOVEX Client 1.21.11 Fabric [SkyBlock]";
 
         let mut on = groups[0].toggled(&HashSet::new());
         assert_eq!(
@@ -624,7 +638,7 @@ mod tests {
     fn editing_a_mod_only_touches_picked_versions() {
         let clusters = catalog();
         let groups = bundle_groups(&clusters);
-        let name = "OneClient 1.21.11 Fabric [SkyBlock]";
+        let name = "NOVEX Client 1.21.11 Fabric [SkyBlock]";
 
         let keys = |selected: &HashSet<String>, remembered: &[i64]| {
             let scope = edit_scope(&groups[0], selected, remembered);
@@ -648,15 +662,32 @@ mod tests {
         let clusters = vec![ClusterBundles {
             cluster: cluster(1),
             archives: vec![
-                archive("QoL", true, vec![file("polyplus", true, false), file("qol-a", true, false)]),
-                archive("HUD", true, vec![file("polyplus", true, false), file("hud-a", true, false)]),
-                archive("SkyBlock", false, vec![file("polyplus", true, false), file("sb-a", true, false)]),
+                archive(
+                    "QoL",
+                    true,
+                    vec![file("polyplus", true, false), file("qol-a", true, false)],
+                ),
+                archive(
+                    "HUD",
+                    true,
+                    vec![file("polyplus", true, false), file("hud-a", true, false)],
+                ),
+                archive(
+                    "SkyBlock",
+                    false,
+                    vec![file("polyplus", true, false), file("sb-a", true, false)],
+                ),
             ],
         }];
         let groups = bundle_groups(&clusters);
         let mut selected = crate::view::onboarding::default_selection(&clusters, None);
 
-        let keys = mod_keys(&clusters, &edit_scope(&groups[0], &selected, &[]), &selected, "polyplus");
+        let keys = mod_keys(
+            &clusters,
+            &edit_scope(&groups[0], &selected, &[]),
+            &selected,
+            "polyplus",
+        );
         toggle_keys(&mut selected, &keys);
 
         let (overrides, _) = crate::hooks::bundle_plan(1, &clusters[0].archives, &selected);
@@ -668,8 +699,8 @@ mod tests {
         assert_eq!(
             polyplus,
             vec![
-                ("OneClient 1.21.11 Fabric [QoL]", OverrideType::Disabled),
-                ("OneClient 1.21.11 Fabric [HUD]", OverrideType::Disabled),
+                ("NOVEX Client 1.21.11 Fabric [QoL]", OverrideType::Disabled),
+                ("NOVEX Client 1.21.11 Fabric [HUD]", OverrideType::Disabled),
             ]
         );
     }
@@ -677,7 +708,7 @@ mod tests {
     #[test]
     fn a_version_can_be_dropped_without_touching_the_others() {
         let groups = bundle_groups(&catalog());
-        let name = "OneClient 1.21.11 Fabric [SkyBlock]";
+        let name = "NOVEX Client 1.21.11 Fabric [SkyBlock]";
         let mut on = groups[0].toggled(&HashSet::new());
         on.insert(pkg_key(2, name, "sb-opt"));
 

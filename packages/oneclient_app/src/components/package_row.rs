@@ -1007,8 +1007,7 @@ fn reveal_in_cluster(cluster_id: i64, content_type: ContentType, file_name: Stri
             return;
         };
         use oneclient_content::packages::{PackageStore, store::materialized_root};
-        let cluster = match PackageStore::get_cluster(cluster_id, &state.services.content()).await
-        {
+        let cluster = match PackageStore::get_cluster(cluster_id, &state.services.content()).await {
             Ok(cluster) => cluster,
             Err(err) => {
                 tracing::warn!(%err, "failed to look up cluster for reveal");

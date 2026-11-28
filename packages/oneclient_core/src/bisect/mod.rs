@@ -24,10 +24,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::LauncherResult;
-use crate::game::diagnosis::{LogFindings, MissingDependency, MissingTarget, crash_report_findings};
+use crate::game::diagnosis::{
+    LogFindings, MissingDependency, MissingTarget, crash_report_findings,
+};
 use crate::state::LauncherState;
-use imcs::{Outcome, Plan, State, Test};
 pub use imcs::PlanKind as BisectPlanKind;
+use imcs::{Outcome, Plan, State, Test};
 use meta::{ClassIndex, ModMeta};
 use resolve::{Catalog, Set};
 use version::Predicate;
@@ -236,7 +238,9 @@ impl BisectStatus {
     }
 
     pub fn off_this_round(&self) -> impl Iterator<Item = &BisectMod> {
-        self.mods.iter().filter(|m| !m.on && m.role != BisectRole::KeptOff)
+        self.mods
+            .iter()
+            .filter(|m| !m.on && m.role != BisectRole::KeptOff)
     }
 
     #[must_use]
@@ -780,7 +784,11 @@ pub async fn find_hidden_dependencies(
         .map(|dep| (dep.source, dep.target, dep.classes.len()))
         .collect();
 
-    tracing::info!(cluster_id, found = found.len(), "looked for undeclared dependencies");
+    tracing::info!(
+        cluster_id,
+        found = found.len(),
+        "looked for undeclared dependencies"
+    );
     session.saved.hidden_checked = found.is_empty();
     session.saved.hidden = found;
     bisect_dao::set_search(&state.services.db, cluster_id, &encode(&session.saved)).await?;
@@ -869,7 +877,11 @@ async fn complete_finish(state: &Arc<LauncherState>, cluster_id: i64) -> Launche
             tracing::warn!(cluster_id, %hash, error = %err, "could not restore a mod after the search");
             failure.get_or_insert(BisectError::SwitchFailed {
                 name: session.name(hash),
-                direction: if disable || !was_enabled { "off" } else { "back on" },
+                direction: if disable || !was_enabled {
+                    "off"
+                } else {
+                    "back on"
+                },
                 reason: err.to_string(),
             });
         }
@@ -1010,7 +1022,10 @@ pub async fn accept_bisect_suggestion(
     } else {
         session.names(&requesters)
     };
-    let note = format!("{} will stay on with {with}. Launch again.", session.names(&targets));
+    let note = format!(
+        "{} will stay on with {with}. Launch again.",
+        session.names(&targets)
+    );
     let mut status = advance(state, session).await?;
     bisect_dao::set_retry_note(&state.services.db, cluster_id, &note).await?;
     status.retry_note = Some(note);
@@ -1666,7 +1681,9 @@ async fn catalog(state: &Arc<LauncherState>, session: &Session) -> Catalog {
         if *kind == BisectEdgeKind::Guessed {
             extra.entry(from.clone()).or_default().insert(to.clone());
         } else if let Some(meta) = mods.get_mut(from) {
-            meta.depends.entry(id).or_insert_with(|| vec![Predicate::any()]);
+            meta.depends
+                .entry(id)
+                .or_insert_with(|| vec![Predicate::any()]);
         }
     }
     for (hash, deps) in &session.saved.ignored {
@@ -1803,8 +1820,13 @@ async fn apply(
             testing: session.testing.contains(hash),
         })
         .collect();
-    if let Err(err) =
-        bisect_dao::save(&state.services.db, cluster_id, &encode(&session.saved), &states).await
+    if let Err(err) = bisect_dao::save(
+        &state.services.db,
+        cluster_id,
+        &encode(&session.saved),
+        &states,
+    )
+    .await
     {
         // The saved round still names the old mods, so the files go back to match it
         undo_switches(state, cluster_id, &done).await;
@@ -1945,7 +1967,10 @@ fn describe(session: &Session, catalog: &Catalog) -> BisectStatus {
         BisectStage::Halted
     } else if search.complete || plan.is_none() {
         BisectStage::Complete
-    } else if plan.as_ref().is_some_and(|p| p.kind == BisectPlanKind::Verification) {
+    } else if plan
+        .as_ref()
+        .is_some_and(|p| p.kind == BisectPlanKind::Verification)
+    {
         BisectStage::Verifying
     } else {
         BisectStage::Testing
@@ -2035,7 +2060,13 @@ fn describe(session: &Session, catalog: &Catalog) -> BisectStatus {
             .map(|set| conflict_report(session, catalog, set))
             .collect(),
         pending: session.name_list(&saved.pending),
-        removed: session.name_list(saved.flags.iter().filter(|(_, f)| f.missing).map(|(h, _)| h)),
+        removed: session.name_list(
+            saved
+                .flags
+                .iter()
+                .filter(|(_, f)| f.missing)
+                .map(|(h, _)| h),
+        ),
         can_undo: can_undo(saved),
         can_continue: search.complete
             && !search.conflict.is_empty()
@@ -2083,7 +2114,7 @@ fn report(session: &Session, status: &BisectStatus) -> String {
         BisectStage::Halted => "Stuck: both halves were unclear",
         BisectStage::Complete => "Complete",
     };
-    let _ = writeln!(out, "OneClient problem mod search report");
+    let _ = writeln!(out, "NOVEX Client problem mod search report");
     let _ = writeln!(out, "===================================");
     let _ = writeln!(out, "Status: {stage}");
     let _ = writeln!(
@@ -2103,14 +2134,22 @@ fn report(session: &Session, status: &BisectStatus) -> String {
         for m in &report.mods {
             let _ = writeln!(out, "  - {}", m.name);
             if !m.also.is_empty() {
-                let _ = writeln!(out, "      turning it off also turns off: {}", m.also.join(", "));
+                let _ = writeln!(
+                    out,
+                    "      turning it off also turns off: {}",
+                    m.also.join(", ")
+                );
             }
             if !m.maybe.is_empty() {
                 let _ = writeln!(out, "      may also need off: {}", m.maybe.join(", "));
             }
         }
         if !report.if_all_also.is_empty() {
-            let _ = writeln!(out, "  turning all of them off also turns off: {}", report.if_all_also.join(", "));
+            let _ = writeln!(
+                out,
+                "  turning all of them off also turns off: {}",
+                report.if_all_also.join(", ")
+            );
         }
     };
     for (index, earlier) in status.earlier.iter().enumerate() {
@@ -2148,19 +2187,47 @@ fn report(session: &Session, status: &BisectStatus) -> String {
             test.before.iteration,
             test.before.step
         );
-        let _ = writeln!(out, "      tested: {}", session.name_list(&test.plan.targets()).join(", "));
-        let _ = writeln!(out, "      found so far: {}", session.name_list(&test.before.conflict).join(", "));
-        let _ = writeln!(out, "      suspects: {}", session.name_list(&test.before.candidate_set()).join(", "));
-        let _ = writeln!(out, "      cleared: {}", session.name_list(&test.before.cleared_set()).join(", "));
+        let _ = writeln!(
+            out,
+            "      tested: {}",
+            session.name_list(&test.plan.targets()).join(", ")
+        );
+        let _ = writeln!(
+            out,
+            "      found so far: {}",
+            session.name_list(&test.before.conflict).join(", ")
+        );
+        let _ = writeln!(
+            out,
+            "      suspects: {}",
+            session.name_list(&test.before.candidate_set()).join(", ")
+        );
+        let _ = writeln!(
+            out,
+            "      cleared: {}",
+            session.name_list(&test.before.cleared_set()).join(", ")
+        );
         let _ = writeln!(out, "      mods on: {}", test.enabled.len());
     }
 
     let search = &session.saved.state;
     let _ = writeln!(out, "\nRight now");
-    let _ = writeln!(out, "  suspects: {}", session.name_list(&search.candidate_set()).join(", "));
-    let _ = writeln!(out, "  cleared: {}", session.name_list(&search.cleared_set()).join(", "));
+    let _ = writeln!(
+        out,
+        "  suspects: {}",
+        session.name_list(&search.candidate_set()).join(", ")
+    );
+    let _ = writeln!(
+        out,
+        "  cleared: {}",
+        session.name_list(&search.cleared_set()).join(", ")
+    );
     if !status.pending.is_empty() {
-        let _ = writeln!(out, "  joining after the next check: {}", status.pending.join(", "));
+        let _ = writeln!(
+            out,
+            "  joining after the next check: {}",
+            status.pending.join(", ")
+        );
     }
     out
 }
@@ -2205,7 +2272,11 @@ mod tests {
     fn estimate_matches_the_search() {
         for mods in 0..300 {
             let ids: Set = (0..mods).map(|i| i.to_string()).collect();
-            assert_eq!(estimate_launches(mods), State::new(ids, 1).estimate(), "{mods}");
+            assert_eq!(
+                estimate_launches(mods),
+                State::new(ids, 1).estimate(),
+                "{mods}"
+            );
         }
     }
 
@@ -2251,10 +2322,9 @@ mod tests {
         let all = ["x", "y", "z"].map(String::from);
         let mut saved = Saved::fresh(&all);
         let mut needs_y = ModMeta::library("x.jar");
-        needs_y.depends.insert(
-            ModMeta::library("y.jar").id,
-            vec![Predicate::any()],
-        );
+        needs_y
+            .depends
+            .insert(ModMeta::library("y.jar").id, vec![Predicate::any()]);
         let catalog = Catalog::new(
             BTreeMap::from([
                 ("x".to_string(), needs_y),

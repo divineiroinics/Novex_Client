@@ -17,9 +17,9 @@ mod steps;
 
 pub(crate) use cards::{BUNDLE_CARD_H, BUNDLE_COLUMNS, CellCard, cell_card};
 pub(super) use cards::{WideCard, wide_card};
-pub(crate) use steps::{bundle_blurb, file_keys};
 pub use create::CreateInstanceModal;
 pub use edit::{EditInstanceModal, InstanceFacts};
+pub(crate) use steps::{bundle_blurb, file_keys};
 
 pub fn tidy_file_name(raw: &str) -> String {
     let stem = raw

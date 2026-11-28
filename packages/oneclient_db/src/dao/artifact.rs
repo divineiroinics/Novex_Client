@@ -656,7 +656,13 @@ pub async fn link_cluster_artifact_recording_addition(
         .await?;
 
     Ok((
-        ClusterArtifactRow { cluster_id, hash, cluster_file_name, enabled, seen_status },
+        ClusterArtifactRow {
+            cluster_id,
+            hash,
+            cluster_file_name,
+            enabled,
+            seen_status,
+        },
         stored_added_at.filter(|stored| stored == &added_at),
     ))
 }
@@ -1007,28 +1013,41 @@ mod tests {
             .unwrap();
         assert_eq!(upsert, None);
 
-        unlink_cluster_artifact(&pool, cluster_id, hash).await.unwrap();
-        let (_, replacement) = link_cluster_artifact_recording_addition(&pool, cluster_id, hash, file)
+        unlink_cluster_artifact(&pool, cluster_id, hash)
             .await
             .unwrap();
+        let (_, replacement) =
+            link_cluster_artifact_recording_addition(&pool, cluster_id, hash, file)
+                .await
+                .unwrap();
         let replacement = replacement.unwrap();
         assert_ne!(original, replacement);
         assert!(
             unlink_unchanged_manual_artifacts(&pool, cluster_id, &[(hash, &original)])
-                .await.unwrap().is_none()
+                .await
+                .unwrap()
+                .is_none()
         );
 
-        crate::dao::cluster_bundle::track_bundle_artifact(&pool, cluster_id, hash, "bundle", "v1", "pkg")
-            .await.unwrap();
+        crate::dao::cluster_bundle::track_bundle_artifact(
+            &pool, cluster_id, hash, "bundle", "v1", "pkg",
+        )
+        .await
+        .unwrap();
         assert!(
             unlink_unchanged_manual_artifacts(&pool, cluster_id, &[(hash, &replacement)])
-                .await.unwrap().is_none()
+                .await
+                .unwrap()
+                .is_none()
         );
         crate::dao::cluster_bundle::clear_bundle_tracking(&pool, cluster_id, hash)
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(
             unlink_unchanged_manual_artifacts(&pool, cluster_id, &[(hash, &replacement)])
-                .await.unwrap().is_some()
+                .await
+                .unwrap()
+                .is_some()
         );
     }
 
@@ -1043,22 +1062,43 @@ mod tests {
             insert_artifact(&pool, hash, 0, &file, &file, None)
                 .await
                 .unwrap();
-            let (_, stamp) = link_cluster_artifact_recording_addition(
-                &pool, cluster_id, hash, &file,
-            ).await.unwrap();
+            let (_, stamp) =
+                link_cluster_artifact_recording_addition(&pool, cluster_id, hash, &file)
+                    .await
+                    .unwrap();
             links.push((hash, stamp.unwrap()));
         }
 
-        assert!(unlink_unchanged_manual_artifacts(
-            &pool, cluster_id, &[("first", &links[0].1), ("second", "stale")],
-        ).await.unwrap().is_none());
+        assert!(
+            unlink_unchanged_manual_artifacts(
+                &pool,
+                cluster_id,
+                &[("first", &links[0].1), ("second", "stale")],
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
 
         for (hash, stamp) in &links {
-            assert!(matches_manual_artifact_link(&pool, cluster_id, hash, stamp).await.unwrap());
+            assert!(
+                matches_manual_artifact_link(&pool, cluster_id, hash, stamp)
+                    .await
+                    .unwrap()
+            );
         }
-        let candidates: Vec<_> = links.iter().map(|(hash, stamp)| (*hash, stamp.as_str())).collect();
-        assert_eq!(unlink_unchanged_manual_artifacts(&pool, cluster_id, &candidates)
-            .await.unwrap().unwrap().len(), 2);
+        let candidates: Vec<_> = links
+            .iter()
+            .map(|(hash, stamp)| (*hash, stamp.as_str()))
+            .collect();
+        assert_eq!(
+            unlink_unchanged_manual_artifacts(&pool, cluster_id, &candidates)
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[tokio::test]
@@ -1066,22 +1106,39 @@ mod tests {
         let pool = pool().await;
         let cluster_id = seed_cluster(&pool).await;
         let hash = "same_file";
-        insert_artifact(&pool, hash, 0, "mod.jar", "mod.jar", None).await.unwrap();
-        link_cluster_artifact(&pool, cluster_id, hash, "mod.jar").await.unwrap();
-        let releases = [(0, "modrinth-project", "first-version"),
-                        (0, "modrinth-project", "second-version"),
-                        (1, "curseforge-project", "other-version")];
+        insert_artifact(&pool, hash, 0, "mod.jar", "mod.jar", None)
+            .await
+            .unwrap();
+        link_cluster_artifact(&pool, cluster_id, hash, "mod.jar")
+            .await
+            .unwrap();
+        let releases = [
+            (0, "modrinth-project", "first-version"),
+            (0, "modrinth-project", "second-version"),
+            (1, "curseforge-project", "other-version"),
+        ];
         for (provider, project, version) in releases {
             upsert_provider_release(
                 &pool, provider, project, version, hash, "Mod", version, None, "[]", "[]",
-            ).await.unwrap();
+            )
+            .await
+            .unwrap();
         }
 
-        let identities = list_cluster_release_identities(&pool, cluster_id).await.unwrap();
-        let mut actual = identities.iter().map(|identity| {
-            assert_eq!(identity.hash, hash);
-            (identity.provider, identity.project_id.as_str(), identity.version_id.as_str())
-        }).collect::<Vec<_>>();
+        let identities = list_cluster_release_identities(&pool, cluster_id)
+            .await
+            .unwrap();
+        let mut actual = identities
+            .iter()
+            .map(|identity| {
+                assert_eq!(identity.hash, hash);
+                (
+                    identity.provider,
+                    identity.project_id.as_str(),
+                    identity.version_id.as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
         actual.sort_unstable();
         assert_eq!(actual, releases);
     }

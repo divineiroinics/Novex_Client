@@ -1214,7 +1214,10 @@ mod tests {
             ),
             ((name(&declined), "held".to_string()), "removed".to_string()),
             ((name(&taken), "masked".to_string()), "enabled".to_string()),
-            (("Old".to_string(), "masked".to_string()), "removed".to_string()),
+            (
+                ("Old".to_string(), "masked".to_string()),
+                "removed".to_string(),
+            ),
         ]);
         let rows = bundle_packages(
             vec![

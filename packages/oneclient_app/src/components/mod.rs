@@ -86,8 +86,8 @@ pub use button::{
 };
 pub use charts::{BarChart, PieChart, ValueUnit, slice_color};
 pub use checkbox::checkbox_labeled;
-pub use cluster_menu::{ClusterContextMenu, ClusterMenuTarget};
 pub(crate) use cluster_menu::open_menu_at;
+pub use cluster_menu::{ClusterContextMenu, ClusterMenuTarget};
 pub use cluster_update_popup::ClusterUpdatePopup;
 pub use code_block::CodeBlock;
 pub use color_picker::ColorPicker;
@@ -124,8 +124,8 @@ pub use modpack_confirm_popup::ModpackConfirmPopup;
 pub use navbar::{AppNavbar, OnboardingNavbar};
 pub(crate) use navbar::{window_controls, window_controls_with};
 pub use notifications::{ChevronToggle, NotificationCenter};
-pub(crate) use optional_mods_popup::OptionalModCard;
 pub use onedrive_warning::onedrive_warning;
+pub(crate) use optional_mods_popup::OptionalModCard;
 pub use optional_mods_popup::OptionalModsPopup;
 pub use overlay_popup::{
     OVERLAY_BASE_LEVEL, OVERLAY_MAX_LEVEL, OverlayPopup, overlay_is_topmost, popup_surface,

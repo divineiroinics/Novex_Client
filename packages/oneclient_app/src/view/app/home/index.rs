@@ -185,7 +185,12 @@ impl Component for Home {
             .overflow(Overflow::Clip)
             .on_sized(move |event: Event<SizedEventData>| {
                 let area = event.data().area;
-                stack_area.set_if_modified([area.min_x(), area.min_y(), area.max_x(), area.max_y()]);
+                stack_area.set_if_modified([
+                    area.min_x(),
+                    area.min_y(),
+                    area.max_x(),
+                    area.max_y(),
+                ]);
                 let height = area.height();
                 if (height - *viewport_h.peek()).abs() > 0.5 {
                     viewport_h.set(height);
@@ -210,7 +215,8 @@ impl Component for Home {
                     node.role() != AccessibilityRole::Window
                         && node.bounds().is_some_and(|b| {
                             let (cx, cy) = ((b.x0 + b.x1) / 2., (b.y0 + b.y1) / 2.);
-                            (x0 as f64..x1 as f64).contains(&cx) && (y0 as f64..y1 as f64).contains(&cy)
+                            (x0 as f64..x1 as f64).contains(&cx)
+                                && (y0 as f64..y1 as f64).contains(&cy)
                         })
                 };
                 match e.key {

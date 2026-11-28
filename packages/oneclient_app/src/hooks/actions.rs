@@ -310,7 +310,10 @@ impl Actions {
 
     /// Applies the net config before resyncing so the sync fetches the new channel
     pub fn set_nightly_bundles(&self, enabled: bool) {
-        if self.mutate_settings(|s| s.nightly_bundles = enabled).is_none() {
+        if self
+            .mutate_settings(|s| s.nightly_bundles = enabled)
+            .is_none()
+        {
             return;
         }
         let actions = self.clone();
@@ -1633,12 +1636,18 @@ impl Actions {
                         report.imported.iter().map(|row| row.hash.clone()).collect();
                     let duplicates = off_ui({
                         let state = state.clone();
-                        async move { oneclient_core::game::shadowed_bundle_mods(&state, cluster_id).await }
+                        async move {
+                            oneclient_core::game::shadowed_bundle_mods(&state, cluster_id).await
+                        }
                     })
                     .await;
                     let copied = imported.iter().any(|hash| {
                         duplicates.copies.contains_key(hash)
-                            || duplicates.copies.values().flatten().any(|copy| copy == hash)
+                            || duplicates
+                                .copies
+                                .values()
+                                .flatten()
+                                .any(|copy| copy == hash)
                     });
                     // Set before the refetch so the mods list sees it when the new copies arrive
                     if copied {
@@ -1650,7 +1659,10 @@ impl Actions {
                         // `current()` reads a component context this global task doesn't
                         // have, so parse the plain route string instead
                         if let Some(router) = &router
-                            && router.full_route_string().parse::<crate::routes::Route>().ok()
+                            && router
+                                .full_route_string()
+                                .parse::<crate::routes::Route>()
+                                .ok()
                                 != Some(mods.clone())
                         {
                             let _ = router.push(mods);

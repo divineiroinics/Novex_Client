@@ -2,8 +2,8 @@ mod download;
 mod gc;
 mod link;
 pub mod manifest;
-pub mod undo;
 mod paths;
+pub mod undo;
 
 pub(crate) use download::store_release_dependencies;
 pub use download::{download_external, download_version_file, ensure_artifact_file};
@@ -117,7 +117,14 @@ impl PackageStore {
         ctx: &ContentCtx,
     ) -> ContentResult<(ArtifactRow, LiveSync)> {
         Self::install_to_cluster_recording_link(
-            provider_id, project, version, cluster_id, skip_compatibility, force_download, child, ctx,
+            provider_id,
+            project,
+            version,
+            cluster_id,
+            skip_compatibility,
+            force_download,
+            child,
+            ctx,
         )
         .await
         .map(|(artifact, live, _)| (artifact, live))
@@ -148,7 +155,8 @@ impl PackageStore {
             Self::download_and_cache(provider_id, project, version, force_download, child, ctx)
                 .await?;
 
-        let (enabled, added_at) = Self::link_artifact_recording_addition(&artifact, &cluster, None, ctx).await?;
+        let (enabled, added_at) =
+            Self::link_artifact_recording_addition(&artifact, &cluster, None, ctx).await?;
 
         Self::replace_other_versions(cluster_id, provider_id, &project.id, &artifact.hash, ctx)
             .await?;
@@ -266,8 +274,13 @@ impl PackageStore {
 
         let name = cluster_file_name.unwrap_or(&artifact.file_name);
 
-        let (link, added_at) =
-            artifact_dao::link_cluster_artifact_recording_addition(&ctx.db, cluster.id, &artifact.hash, name).await?;
+        let (link, added_at) = artifact_dao::link_cluster_artifact_recording_addition(
+            &ctx.db,
+            cluster.id,
+            &artifact.hash,
+            name,
+        )
+        .await?;
 
         Ok((link.enabled != 0, added_at))
     }

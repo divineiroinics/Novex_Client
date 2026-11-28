@@ -559,12 +559,21 @@ pub async fn revalidate_release_migration(
     packages: Vec<ReleaseMigrationPackage>,
     bundles: &BundlesManager,
     ctx: &ContentCtx,
-) -> ContentResult<(Vec<ReleaseMigrationPackage>, Vec<ReleaseMigrationDependency>)> {
+) -> ContentResult<(
+    Vec<ReleaseMigrationPackage>,
+    Vec<ReleaseMigrationDependency>,
+)> {
     let target = PackageStore::get_cluster(cluster_id, ctx).await?;
     let present = target_projects(cluster_id, bundles, ctx).await?;
     let evaluation = resolve_migration_packages(
-        packages, &target, &present, &DependencyCache::new(), ctx, Evaluation::default(),
-    ).await;
+        packages,
+        &target,
+        &present,
+        &DependencyCache::new(),
+        ctx,
+        Evaluation::default(),
+    )
+    .await;
 
     if evaluation.unreachable || !evaluation.unavailable.is_empty() {
         return Err(crate::error::ContentError::InvalidData {

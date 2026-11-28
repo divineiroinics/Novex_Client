@@ -352,9 +352,7 @@ pub async fn read_zip_bytes_entries(
         let Ok(name) = entry.filename().as_str() else {
             continue;
         };
-        if !name.ends_with('/')
-            && filter(name)
-            && entry.uncompressed_size() <= MAX_ZIP_ENTRY_BYTES
+        if !name.ends_with('/') && filter(name) && entry.uncompressed_size() <= MAX_ZIP_ENTRY_BYTES
         {
             entries.push((name.to_string(), index));
         }

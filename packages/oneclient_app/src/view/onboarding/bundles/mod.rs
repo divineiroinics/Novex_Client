@@ -287,7 +287,7 @@ mod tests {
                 ),
             ],
         }];
-        let selected = HashSet::from([pkg_key(1, "OneClient 1.21.11 Fabric [PvP]", "pvp-a")]);
+        let selected = HashSet::from([pkg_key(1, "NOVEX Client 1.21.11 Fabric [PvP]", "pvp-a")]);
 
         let offered: Vec<String> = optional_mods(&items, &selected)
             .into_iter()

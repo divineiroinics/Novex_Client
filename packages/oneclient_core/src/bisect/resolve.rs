@@ -847,7 +847,11 @@ mod tests {
             BTreeMap::from([("a".to_string(), bundler)]),
             BTreeMap::new(),
         );
-        assert!(catalog.directly_unresolvable(&set(&["a"]), false).is_empty());
+        assert!(
+            catalog
+                .directly_unresolvable(&set(&["a"]), false)
+                .is_empty()
+        );
     }
 
     #[test]

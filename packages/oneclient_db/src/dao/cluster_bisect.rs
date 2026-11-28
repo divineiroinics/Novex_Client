@@ -163,7 +163,11 @@ pub async fn add_mods(
     tx.commit().await
 }
 
-pub async fn set_search(pool: &SqlitePool, cluster_id: i64, search: &str) -> Result<(), sqlx::Error> {
+pub async fn set_search(
+    pool: &SqlitePool,
+    cluster_id: i64,
+    search: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
         UPDATE cluster_bisect_sessions SET search = ?

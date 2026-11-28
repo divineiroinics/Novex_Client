@@ -349,7 +349,11 @@ impl Component for AutoScrollFab {
             .position(Position::new_absolute().bottom(16.).right(22.))
             // Above the ScrollArea thumbs (Layer 999) so it paints and takes pointer events on top
             .layer(Layer::Relative(1000))
-            .child(if on { button.primary() } else { button.secondary() })
+            .child(if on {
+                button.primary()
+            } else {
+                button.secondary()
+            })
     }
 }
 

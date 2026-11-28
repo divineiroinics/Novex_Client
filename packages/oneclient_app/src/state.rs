@@ -658,7 +658,10 @@ mod tests {
         use MigrationDirection::{From, Into};
         let inbound = [cluster(2)];
         let outbound = [cluster(3)];
-        assert_eq!(opening_direction(&inbound, &outbound, From, Some(3)), Some(From));
+        assert_eq!(
+            opening_direction(&inbound, &outbound, From, Some(3)),
+            Some(From)
+        );
         assert_eq!(opening_direction(&inbound, &outbound, From, Some(9)), None);
         assert_eq!(opening_direction(&inbound, &[], From, Some(3)), None);
         assert_eq!(opening_direction(&inbound, &[], From, None), Some(Into));

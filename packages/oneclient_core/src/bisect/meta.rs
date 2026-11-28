@@ -525,7 +525,10 @@ mod tests {
         .unwrap();
         assert!(meta.depends.contains_key("forge"));
         assert!(meta.depends.contains_key("oneconfig"));
-        assert!(meta.loose_id, "mcmod.info ids are not used to spot duplicates");
+        assert!(
+            meta.loose_id,
+            "mcmod.info ids are not used to spot duplicates"
+        );
     }
 
     #[test]
