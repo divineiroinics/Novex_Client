@@ -194,7 +194,6 @@ jobs:
         run: python3 scripts/build-novex-badge-mods.py
 
       - name: Install cargo-packager
-        if: matrix.os_key == 'linux'
         uses: ./.github/actions/install-cargo-tool
         with:
           tool: cargo-packager
@@ -258,13 +257,17 @@ jobs:
 
       - name: Package
         shell: bash
-        if: matrix.os_key == 'linux'
         env:
           CI: true
           NOVEX_UPDATER_PUBKEY: ${{ vars.NOVEX_UPDATER_PUBKEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
-        run: cargo packager --release --formats ${{ matrix.formats }} --verbose
+        run: |
+          ARGS="--release --formats ${{ matrix.formats }}"
+          if [ -n "${{ matrix.target }}" ]; then
+            ARGS="$ARGS --target ${{ matrix.target }}"
+          fi
+          cargo packager $ARGS --verbose
 
       - name: Resolve packager output dir
         id: outdir
@@ -300,128 +303,14 @@ jobs:
           done
           sentry-cli debug-files upload --include-sources "$SYMS"
 
-      - name: Upload installers and build manifest fragment
-        if: matrix.os_key == 'linux'
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-          OUT_DIR: ${{ steps.outdir.outputs.dir }}
-          OS_KEY: ${{ matrix.os_key }}
-          ARCH: ${{ matrix.arch }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: bash .github/scripts/upload-release-assets.sh
-
-      - name: Upload manifest fragment
-        if: matrix.os_key == 'linux'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: manifest-${{ matrix.os_key }}-${{ matrix.arch }}
-          path: fragments/*.json
-          overwrite: true
-
-  # ---------------------------------------------------------------------------
-  windows-sign:
-    needs: [prepare, package]
-    runs-on: windows-latest
-    permissions:
-      contents: write
-      # Required so SignPath can download the uploaded build artifacts.
-      actions: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-
-      - name: Find unsigned app binary artifact
-        id: win_unsigned_bin
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=oneclient-windows-binary-unsigned" --jq '.artifacts[0].id')"
-          [ -n "$id" ] || { echo "::error::oneclient-windows-binary-unsigned artifact not found"; exit 1; }
-          echo "artifact-id=$id" >> "$GITHUB_OUTPUT"
-
-      - name: (Windows) Submit SignPath signing request for app binary
-        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1.3
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: onelauncher
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: onelauncher-binary
-          github-artifact-id: ${{ steps.win_unsigned_bin.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 3600
-          output-artifact-directory: signed-bin
-
-      - name: (Windows) Swap in signed app binary
-        shell: bash
-        run: |
-          set -euo pipefail
-          signed="signed-bin/oneclient_app.exe"
-          if [ ! -e "$signed" ]; then
-            echo "::error::SignPath did not return signed-bin/oneclient_app.exe"
-            ls -R signed-bin || true
-            exit 1
-          fi
-          mkdir -p target/release
-          cp "$signed" target/release/oneclient_app.exe
-
-      - name: (Windows) Verify app binary is signed
-        shell: pwsh
-        run: |
-          $sig = Get-AuthenticodeSignature 'target/release/oneclient_app.exe'
-          Write-Host "Authenticode status: $($sig.Status)"
-          Write-Host "Signer: $($sig.SignerCertificate.Subject)"
-          if ($sig.Status -eq 'NotSigned') {
-            Write-Error 'oneclient_app.exe carries no Authenticode signature'
-            exit 1
-          }
-
-      - name: (Windows) Stage app-local VC++ runtime
-        shell: bash
-        run: python3 distribution/windows/bundle-crt.py
-
-      - name: (Windows) Verify staged runtime is Microsoft-signed
-        shell: pwsh
-        run: |
-          $dlls = @(Get-ChildItem 'target/crt/*.dll')
-          if ($dlls.Count -eq 0) { Write-Error 'no CRT DLLs staged'; exit 1 }
-          foreach ($dll in $dlls) {
-            $sig = Get-AuthenticodeSignature $dll.FullName
-            Write-Host "$($dll.Name): $($sig.Status) $($sig.SignerCertificate.Subject)"
-            if ($sig.Status -ne 'Valid') {
-              Write-Error "$($dll.Name) signature is $($sig.Status), refusing to ship it"
-              exit 1
-            }
-            if ($sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
-              Write-Error "$($dll.Name) is not signed by Microsoft"
-              exit 1
-            }
-          }
-
-      - name: Install cargo-packager
-        uses: ./.github/actions/install-cargo-tool
-        with:
-          tool: cargo-packager
-          version: 0.11.8
-
-      - name: Package
-        shell: bash
-        env:
-          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
-          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
-          CI: 'true'
-        run: cargo packager --release --formats nsis --verbose
-
       - name: (Windows) Locate installer
+        if: matrix.platform == 'windows-latest'
         id: win_installer
         shell: bash
-        run: echo "path=$(ls target/release/*-setup.exe | head -n1)" >> "$GITHUB_OUTPUT"
+        run: echo "path=$(ls ${{ steps.outdir.outputs.dir }}/*-setup.exe | head -n1)" >> "$GITHUB_OUTPUT"
 
       - name: (Windows) Smoke-test installer layout
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -452,8 +341,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.prepare.outputs.tag }}
-          OUT_DIR: target/${{ matrix.target }}/release
-          OS_KEY: darwin
+          OUT_DIR: ${{ steps.outdir.outputs.dir }}
+          OS_KEY: ${{ matrix.os_key }}
           ARCH: ${{ matrix.arch }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
@@ -537,12 +426,11 @@ jobs:
       - name: Upload manifest fragment
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: manifest-darwin-${{ matrix.arch }}
+          name: manifest-${{ matrix.os_key }}-${{ matrix.arch }}
           path: fragments/*.json
-          overwrite: true
 
   manifest:
-    needs: [prepare, package, windows-sign, macos-sign]
+    needs: [prepare, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -41,24 +41,12 @@ impl App for NovexClientApp {
         let boot_launch = self.boot_launch.take();
         let boot_share = self.boot_share.take();
 
-        use_hook(|| {
-            platform::register_main_window(Platform::window_id());
-            #[cfg(target_os = "macos")]
-            platform::macos::handle_dock_reopen();
-        });
-
         let actions = use_hook(move || {
-            // Reopening after a close to the background, everything below is already running
-            if let Some(actions) = GlobalContexts::get().try_get_context::<Actions>() {
-                return actions;
-            }
-
             let (signals_tx, signals_rx) = tokio::sync::mpsc::unbounded_channel();
             let (events_bus, events_rx) = oneclient_events::EventBus::channel();
             let actions = Actions::new(station, signals_tx, events_bus.clone());
 
-            // Global so game tracking and the tray outlive the window when it closes to the background
-            spawn_global(
+            spawn_in_window(
                 EventPump {
                     events: events_rx,
                     signals: signals_rx,
@@ -71,7 +59,7 @@ impl App for NovexClientApp {
             if !needs_location {
                 let startup = actions.clone();
                 let rescue_bus = events_bus.clone();
-                spawn_global(async move {
+                spawn_in_window(async move {
                     match events::start_launcher(station, events_bus).await {
                         // Must follow startup `sync_bundles` needs the launcher handle and firing
                         // it early leaves `syncing_bundles` stuck disabling every launch button
@@ -252,40 +240,9 @@ fn main() {
     let window_config = WindowConfig::new_app(NovexClientApp {
         needs_location,
         start_maximized,
-    );
-
-    let mut launch_config = LaunchConfig::new()
-        .with_window(window_config)
-        // Closing to the background leaves no windows, every real exit goes through `platform::quit`
-        .with_exit_on_close(false)
-        .with_gpu_resource_cache_limit(
-            std::env::var("ONECLIENT_GPU_CACHE_BYTES")
-                .ok()
-                .and_then(|v| v.parse::<usize>().ok())
-                .unwrap_or(128 * 1024 * 1024),
-        )
-        .with_plugin(freya::borderless::BorderlessPlugin::new())
-        .with_plugin(freya::metrics::MetricsPlugin::default())
-        .with_default_font(theme::DEFAULT_FONT);
-
-    #[cfg(target_os = "windows")]
-    {
-        launch_config = launch_config.with_plugin(platform::frame::FramePlugin(settings.window_frame_fix));
-    }
-
-    if show_tray_icon {
-        launch_config = launch_config.with_tray(platform::tray::build, platform::tray::handle);
-    }
-
-    for (font, bytes) in theme::load_fonts() {
-        launch_config = launch_config.with_font(font, bytes);
-    }
-
-    launch(launch_config);
-}
-
-fn main_window_config(app: OneClientApp, start_maximized: bool) -> WindowConfig {
-    let window_config = WindowConfig::new_app(app)
+        boot_launch: Cell::new(cli.launch.clone()),
+        boot_share: Cell::new(cli.share.clone()),
+    })
     .with_title(constants::WINDOW_TITLE)
     .with_app_id(constants::WINDOW_APP_ID)
     .with_icon(LaunchConfig::window_icon(include_bytes!(
@@ -327,5 +284,30 @@ fn main_window_config(app: OneClientApp, start_maximized: bool) -> WindowConfig 
         .with_decorations(false)
         .with_window_attributes(move |attrs, _| attrs.with_maximized(start_maximized));
 
-    window_config
+    let mut launch_config = LaunchConfig::new()
+        .with_window(window_config)
+        .with_gpu_resource_cache_limit(
+            std::env::var("ONECLIENT_GPU_CACHE_BYTES")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(128 * 1024 * 1024),
+        )
+        .with_plugin(freya::borderless::BorderlessPlugin::new())
+        .with_plugin(freya::metrics::MetricsPlugin::default())
+        .with_default_font(theme::DEFAULT_FONT);
+
+    #[cfg(target_os = "windows")]
+    {
+        launch_config = launch_config.with_plugin(platform::frame::FramePlugin);
+    }
+
+    if show_tray_icon {
+        launch_config = launch_config.with_tray(platform::tray::build, platform::tray::handle);
+    }
+
+    for (font, bytes) in theme::load_fonts() {
+        launch_config = launch_config.with_font(font, bytes);
+    }
+
+    launch(launch_config);
 }

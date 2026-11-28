@@ -37,7 +37,6 @@ const BACKFILL_CONCURRENCY: usize = 6;
 /// that issued them. Modrinth pins a project, a version or both, and the two id
 /// spaces are disjoint, so a package answers to every key it has.
 type DependencyKey = (ProviderId, String);
-type DependentEdges = HashMap<DependencyKey, Vec<(String, DependencyKind)>>;
 
 /// One installed package that depends on the one being disabled.
 #[derive(Debug, Clone, PartialEq, Eq)]

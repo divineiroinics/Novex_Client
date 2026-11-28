@@ -13,7 +13,7 @@ use crate::components::{
     Segment, SegmentedControl, TextInput, bundled_delete_action, package_context_menu,
     parse_folder_pack_id, run_guarded, use_shared_delete,
 };
-use crate::hooks::{ClusterAction, PackageCheck, Selection, use_cluster_mutation, use_dispatch};
+use crate::hooks::{ClusterAction, Selection, use_cluster_mutation, use_dispatch};
 use crate::i18n::{t, tf};
 use crate::routes::Route;
 use crate::theme::{colors, rounded, rounded_px, text_size};
@@ -969,50 +969,6 @@ impl Component for ContentBox {
         let warnings_query = use_disable_warnings();
         let mut menu = use_state(|| None::<(f32, f32, PackageEntry)>);
         let mut copies_of = use_state(|| None::<String>);
-        // Copy groups an import asked to show, waiting for the open one to close
-        let mut queued_copies = use_state(Vec::<String>::new);
-        // Every group, hidden Advanced ones included, so only the import decides what opens
-        let copy_groups: Vec<(String, Vec<String>)> = self
-            .items
-            .iter()
-            .chain(self.advanced.iter())
-            .filter(|item| !item.copies.is_empty())
-            .map(|item| {
-                let hashes = item
-                    .hash
-                    .iter()
-                    .chain(item.copies.iter().filter_map(|copy| copy.hash.as_ref()))
-                    .cloned()
-                    .collect();
-                (item.package_id.clone(), hashes)
-            })
-            .collect();
-        use_side_effect_with_deps(&copy_groups, move |groups| {
-            let mut request = crate::hooks::COPIES_REQUEST.lock().unwrap();
-            let Some((_, wanted)) = request.as_ref().filter(|(cluster, _)| *cluster == cluster_id)
-            else {
-                return;
-            };
-            let mut found: Vec<String> = groups
-                .iter()
-                .filter(|(_, hashes)| hashes.iter().any(|hash| wanted.contains(hash)))
-                .map(|(package_id, _)| package_id.clone())
-                .collect();
-            if found.is_empty() {
-                return;
-            }
-            *request = None;
-            if copies_of.peek().is_none() {
-                copies_of.set(Some(found.remove(0)));
-            }
-            queued_copies.write().extend(found);
-        });
-        use_side_effect(move || {
-            if copies_of.read().is_none() && !queued_copies.peek().is_empty() {
-                let next = queued_copies.write().remove(0);
-                copies_of.set(Some(next));
-            }
-        });
         let (on_delete, delete_dialog) =
             use_shared_delete(cluster_id, move |(_, hash): (String, String)| {
                 cluster.mutate(match parse_folder_pack_id(&hash) {
@@ -1100,12 +1056,7 @@ impl Component for ContentBox {
         let copies_target = copies_of
             .read()
             .as_ref()
-            .and_then(|key| {
-                items
-                    .iter()
-                    .chain(self.advanced.iter())
-                    .find(|item| &item.package_id == key)
-            })
+            .and_then(|key| items.iter().find(|item| &item.package_id == key))
             .filter(|item| !item.copies.is_empty())
             .cloned();
         let copies_open = copies_target.is_some();
@@ -1135,8 +1086,6 @@ impl Component for ContentBox {
                     rect()
                         .width(Size::window_percent(100.))
                         .height(Size::window_percent(100.))
-                        .on_global_file_hover(move |_| copies_of.set(None))
-                        .on_pointer_press(move |_| copies_of.set(None))
                         .center()
                         .child(
                             rect()
@@ -1148,33 +1097,15 @@ impl Component for ContentBox {
                                 .corner_radius(rounded(14.))
                                 .background(colors::page_elevated())
                                 .border(border_all_color(1., colors::component_border()))
-                                .on_pointer_press(|e: Event<PointerEventData>| e.stop_propagation())
                                 .child(
-                                    rect()
-                                        .horizontal()
-                                        .width(Size::fill())
-                                        .content(Content::Flex)
-                                        .cross_align(Alignment::Center)
-                                        .spacing(10.)
-                                        .child(
-                                            label()
-                                                .text(tf(
-                                                    "oneclient.cluster.package_manager.copies.title",
-                                                    &[&(item.copies.len() + 1), &item.name],
-                                                ))
-                                                .width(Size::flex(1.0))
-                                                .font_size(text_size(16.))
-                                                .font_weight(FontWeight::SEMI_BOLD)
-                                                .color(colors::fg_strong()),
-                                        )
-                                        .child(
-                                            Button::new()
-                                                .ghost()
-                                                .icon()
-                                                .tooltip(t("oneclient.common.close"))
-                                                .on_press(move |_| copies_of.set(None))
-                                                .child(Icon::new(IconType::X).size(18.)),
-                                        ),
+                                    label()
+                                        .text(tf(
+                                            "oneclient.cluster.package_manager.copies.title",
+                                            &[&(item.copies.len() + 1), &item.name],
+                                        ))
+                                        .font_size(text_size(16.))
+                                        .font_weight(FontWeight::SEMI_BOLD)
+                                        .color(colors::fg_strong()),
                                 )
                                 .child(
                                     label()
@@ -1220,7 +1151,6 @@ impl Component for ContentBox {
                     &item,
                     cluster_id,
                     package_type,
-                    content_type,
                     on_delete,
                     on_bundled,
                     (move |()| selection.toggle(key.clone())).into(),
