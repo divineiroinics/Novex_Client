@@ -24,6 +24,7 @@ use crate::game::{DirBusy, GameError};
 use crate::settings::GameSettingsProfile;
 use crate::state::{LauncherServices, LauncherState};
 use oneclient_auth::MinecraftAccount;
+use oneclient_common::domain::GameLoader;
 use oneclient_common::paths;
 use oneclient_content::bundles::BUNDLE_APPLY_BUDGET;
 use oneclient_discord::Presence;
@@ -136,6 +137,9 @@ async fn start(
     if crate::clusters::is_resetting(cluster_id) {
         return Err(GameError::Resetting.into());
     }
+    if crate::bisect::is_switching(cluster_id) {
+        return Err(GameError::Diagnosing.into());
+    }
     match crate::clusters::reset_unfinished(state, cluster_id).await {
         Ok(true) => return Err(GameError::ResetUnfinished.into()),
         Ok(false) => {}
@@ -199,6 +203,9 @@ async fn start(
         )
         .await
     {
+        if err.is_cancelled() {
+            return Err(err);
+        }
         tracing::warn!(cluster_id, error = %err, "failed to apply bundle java override");
     }
 
@@ -306,24 +313,42 @@ async fn start(
         state.games.set_natives(cluster_id, dir);
     }
 
-    let java = if let Some(runtime) = state
+    let native_ok = crate::game::natives::native_java_ok(&version_info);
+    let required_major =
+        crate::clusters::java_override::effective_java_major(state, &cluster, &version_info).await;
+    let pinned = state
         .java
         .runtime_for_profile(profile.java_path.as_deref())
-        .await?
-    {
-        runtime
-    } else {
-        let major = version_info
-            .java_version
-            .as_ref()
-            .map(|v| v.major_version)
-            .ok_or(GameError::MissingJavaVersion)?;
+        .await?;
+    let java = match pinned {
+        Some(runtime) if !oneclient_java::wrong_arch_for_game(&runtime.os_arch, native_ok) => {
+            runtime
+        }
+        pinned => {
+            let major = match &pinned {
+                Some(runtime) => {
+                    tracing::info!(
+                        cluster_id,
+                        path = %runtime.absolute_path,
+                        os_arch = %runtime.os_arch,
+                        native_ok,
+                        "pinned Java has the wrong architecture for this version"
+                    );
+                    runtime.major
+                }
+                None => required_major.ok_or(GameError::MissingJavaVersion)?,
+            };
 
-        state
-            .java
-            .prepare(major, search_for_java, false, None)
-            .await?
+            state
+                .java
+                .prepare(major, native_ok, search_for_java, false, None)
+                .await?
+        }
     };
+    let java = state
+        .java
+        .check_legacy_macos(java, required_major, native_ok, search_for_java)
+        .await?;
 
     // Stats every library and the asset tree, the same work `plan_downloads`
     // already keeps off the runtime threads. `block_in_place` because
@@ -406,6 +431,15 @@ async fn start(
 
     if !dedicated {
         crate::game::link_cluster_logs(&cluster, &cwd).await;
+    }
+
+    if matches!(cluster.mc_loader, GameLoader::Fabric | GameLoader::Ornithe) {
+        crate::game::fabric::drop_stale_remapped_jars(
+            &cwd,
+            &cluster.mc_version,
+            version_info.libraries.iter().map(|lib| lib.name.as_str()),
+        )
+        .await;
     }
 
     let client_jar = paths::versions_dir()?
@@ -509,7 +543,8 @@ async fn start(
     );
     tracing::debug!(cluster_id, ?jvm_args, main_class = %version_info.main_class, "jvm arguments");
 
-    let (mut command, wrapper) = base_command(&profile, &java.absolute_path);
+    let java_exe = oneclient_java::legacy_gl_executable(Path::new(&java.absolute_path)).await;
+    let (mut command, wrapper) = base_command(&profile, &java_exe.to_string_lossy());
 
     if let Some(gpu) = profile.gpu().or(crate::game::gpu::DEFAULT) {
         crate::game::gpu::select(&mut command, &java.absolute_path, gpu).await;
@@ -523,12 +558,32 @@ async fn start(
         .args(mc_args)
         .current_dir(&cwd);
 
+    // The folder name under metadata/java names the exact build we installed
+    let java_name = paths::java_dir()
+        .ok()
+        .and_then(|dir| {
+            Path::new(&java.absolute_path)
+                .strip_prefix(dir)
+                .ok()?
+                .components()
+                .next()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| format!("{} {}", java.vendor, java.version));
+    let loader = match loader_version_id {
+        Some(id) => format!("{} {id}", cluster.mc_loader),
+        None => cluster.mc_loader.to_string(),
+    };
     let header = format!(
         "NOVEX Client {} · {} · {version_name} · Java {}\n\n{}\n\n",
         env!("CARGO_PKG_VERSION"),
-        cluster.name,
+        if cfg!(debug_assertions) { "debug" } else { "release" },
+        sysinfo::System::kernel_long_version(),
+        std::env::consts::ARCH,
+        cluster.mc_version,
         java.major,
-        command_line(command.as_std(), &version_info.main_class),
+        shell_quote(&cwd.to_string_lossy()),
+        command_line(command.as_std()),
     );
 
     let log_path = oneclient_cluster::logs::cluster_output_log(&cluster)?;
@@ -1021,12 +1076,16 @@ pub async fn repair_cluster(state: &Arc<LauncherState>, cluster_id: i64) {
 }
 
 fn base_command(profile: &GameSettingsProfile, java_path: &str) -> (Command, Option<String>) {
-    let Some(wrapper) = profile
+    let wrapper = profile
         .hook_wrapper
         .as_deref()
         .map(str::trim)
-        .filter(|hook| !hook.is_empty())
-    else {
+        .filter(|hook| !hook.is_empty());
+    #[cfg(target_os = "linux")]
+    let gamemode = gamemode_wrapper(profile, wrapper);
+    #[cfg(target_os = "linux")]
+    let wrapper = gamemode.as_deref().or(wrapper);
+    let Some(wrapper) = wrapper else {
         return (Command::new(java_path), None);
     };
 
@@ -1041,17 +1100,28 @@ fn base_command(profile: &GameSettingsProfile, java_path: &str) -> (Command, Opt
     (command, Some(program.to_string()))
 }
 
-fn command_line(command: &std::process::Command, main_class: &str) -> String {
-    #[cfg(not(windows))]
-    const CONTINUATION: &str = " \\\n  ";
-    #[cfg(windows)]
-    const CONTINUATION: &str = " `\n  ";
-
-    let mut out = String::new();
-    if let Some(dir) = command.get_current_dir() {
-        let _ = writeln!(out, "cd {}", shell_quote(&dir.to_string_lossy()));
+#[cfg(target_os = "linux")]
+fn gamemode_wrapper(profile: &GameSettingsProfile, wrapper: Option<&str>) -> Option<String> {
+    let enabled = profile
+        .os_extra
+        .as_ref()
+        .is_none_or(|extra| extra.enable_gamemode != Some(false));
+    if !enabled || wrapper.is_some_and(|w| w.split_whitespace().any(|p| p.ends_with("gamemoderun")))
+    {
+        return None;
     }
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .any(|dir| dir.join("gamemoderun").is_file())
+        .then_some(())?;
+    Some(match wrapper {
+        Some(wrapper) => format!("gamemoderun {wrapper}"),
+        None => "gamemoderun".to_string(),
+    })
+}
 
+fn command_line(command: &std::process::Command) -> String {
+    let mut out = String::new();
     for (key, value) in command.get_envs() {
         let (key, Some(value)) = (key.to_string_lossy(), value) else {
             continue;
@@ -1060,7 +1130,7 @@ fn command_line(command: &std::process::Command, main_class: &str) -> String {
         #[cfg(not(windows))]
         let _ = write!(out, "{key}={value} ");
         #[cfg(windows)]
-        let _ = writeln!(out, "$env:{key} = {value}");
+        let _ = write!(out, "$env:{key} = {value}; ");
     }
 
     #[cfg(windows)]
@@ -1070,14 +1140,8 @@ fn command_line(command: &std::process::Command, main_class: &str) -> String {
     out += &shell_quote(&command.get_program().to_string_lossy());
 
     for arg in command.get_args() {
-        let arg = arg.to_string_lossy();
-        let arg = oneclient_cluster::logs::censor(&arg);
-        out += if arg.starts_with('-') || arg == main_class {
-            CONTINUATION
-        } else {
-            " "
-        };
-        out += &shell_quote(&arg);
+        out += " ";
+        out += &shell_quote(&oneclient_cluster::logs::censor(&arg.to_string_lossy()));
     }
 
     out

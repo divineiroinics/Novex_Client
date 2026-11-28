@@ -25,8 +25,8 @@ use crate::components::{
     TextInput, centered_spinner,
 };
 use crate::hooks::{
-    ClusterAction, settled_or_loading, use_cluster_mutation, use_clusters, use_dispatch,
-    use_shared_groups,
+    ClusterAction, settled_or_loading, shared_mod_keys, toggle_keys, use_cluster_mutation,
+    use_clusters, use_dispatch, use_shared_groups,
 };
 use crate::i18n::{t, tf};
 use crate::theme::{colors, rounded, text_size};
@@ -893,7 +893,7 @@ fn shown_files<'a>(
     })
 }
 
-fn bundle_blurb<'a>(
+pub(crate) fn bundle_blurb<'a>(
     files: impl Iterator<Item = &'a BundleFile>,
     names: &HashMap<String, String>,
 ) -> String {
@@ -931,19 +931,17 @@ fn update_picked(
     }
 }
 
-fn file_keys(archive: &BundleArchive, keep: impl Fn(&BundleFile) -> bool) -> Vec<String> {
+pub(crate) fn file_keys(
+    cluster_id: i64,
+    archive: &BundleArchive,
+    keep: impl Fn(&BundleFile) -> bool,
+) -> Vec<String> {
     archive
         .manifest
         .files
         .iter()
         .filter(|file| !file.hidden && keep(file))
-        .map(|file| {
-            pkg_key(
-                UNCREATED_CLUSTER,
-                &archive.manifest.name,
-                &file.kind.package_id(),
-            )
-        })
+        .map(|file| pkg_key(cluster_id, &archive.manifest.name, &file.kind.package_id()))
         .collect()
 }
 
@@ -982,8 +980,8 @@ fn bundles_step(mut wizard: Wizard, picks: &Picks) -> Element {
             let name = archive.manifest.name.clone();
             let taken = picks.bundles.taken(archive);
             let count = shown_files(archive, &picks.bundles.picked, taken).count();
-            let visible = file_keys(archive, |_| true);
-            let mut turn_on = file_keys(archive, is_default_file);
+            let visible = file_keys(UNCREATED_CLUSTER, archive, |_| true);
+            let mut turn_on = file_keys(UNCREATED_CLUSTER, archive, is_default_file);
             if turn_on.is_empty() {
                 turn_on = visible.clone();
             }
@@ -1048,10 +1046,12 @@ fn bundle_mods(mut wizard: Wizard, picks: &Picks, archive: &BundleArchive) -> El
         .iter()
         .filter(|file| !file.hidden)
         .map(|file| {
-            let key = pkg_key(
+            let keys = shared_mod_keys(
                 UNCREATED_CLUSTER,
+                &picks.bundles.archives,
                 &archive.manifest.name,
                 &file.kind.package_id(),
+                &picks.bundles.picked,
             );
             let provider = file.kind.metadata_provider();
             let entry = make_row(
@@ -1060,7 +1060,7 @@ fn bundle_mods(mut wizard: Wizard, picks: &Picks, archive: &BundleArchive) -> El
                 provider,
                 file.size,
                 Vec::new(),
-                picks.bundles.picked.contains(&key),
+                keys.iter().any(|key| picks.bundles.picked.contains(key)),
                 file.enabled,
                 file.is_github_hosted(),
                 None,
@@ -1074,9 +1074,7 @@ fn bundle_mods(mut wizard: Wizard, picks: &Picks, archive: &BundleArchive) -> El
             let target = picks.bundle_target().map(|target| target.key.clone());
             let on_toggle: EventHandler<()> = (move |()| {
                 update_picked(wizard, target.clone(), &defaults, |picked| {
-                    if !picked.remove(&key) {
-                        picked.insert(key.clone());
-                    }
+                    toggle_keys(picked, &keys);
                 });
             })
             .into();

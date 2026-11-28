@@ -17,12 +17,13 @@ use crate::components::{
     toggle_controlled, validate_number,
 };
 use crate::hooks::{
-    ClusterAction, java_runtimes, load_is_shared, load_setting_files, load_sync_left_out,
-    loader_versions, mutation_is_running, query_error, settled_or_loading, try_game_profile,
-    use_cloud_sync, use_cluster_mutation, use_clusters, use_dispatch, use_game_profile,
-    use_game_snapshot, use_graphics_backend, use_has_game_options, use_is_migration_source,
-    use_java_runtimes, use_launcher, use_loader_versions, use_migratable_routes,
-    use_release_migration_checking, use_settings_snapshot, use_shared_groups,
+    ClusterAction, available_bundles, java_runtimes, load_is_shared, load_setting_files,
+    load_sync_left_out, loader_versions, mutation_is_running, query_error, settled_or_loading,
+    try_game_profile, use_available_bundles, use_cloud_sync, use_cluster_mutation, use_clusters,
+    use_dispatch, use_game_profile, use_game_snapshot, use_graphics_backend, use_has_game_options,
+    use_installs_snapshot, use_is_migration_source, use_java_runtimes, use_launcher,
+    use_loader_versions, use_migratable_routes, use_release_migration_checking,
+    use_settings_snapshot, use_shared_groups,
 };
 use crate::i18n::{t, tf};
 use crate::layout::cluster_content;
@@ -30,14 +31,15 @@ use crate::routes::Route;
 use crate::theme::{self, colors, rounded, text_size};
 use crate::ui::{border_all_color, centered_note};
 use crate::view::app::clusters::{
-    ClusterPickerButton, CreateInstanceModal, DeleteInstanceModal, EditInstanceModal,
-    ExportInstanceModal, InstanceFacts, ResetInstanceModal,
+    CreateInstanceModal, DeleteInstanceModal, EditInstanceModal, ExportInstanceModal,
+    InstanceFacts, ResetInstanceModal,
 };
 use crate::view::app::launch_syncing;
 use crate::view::app::settings::{
     section_header, settings_row, settings_row_danger, settings_row_disabled,
 };
-use oneclient_core::clusters::{Cluster, DirTarget, rank_migration_sources};
+use crate::state::MigrationDirection;
+use oneclient_core::clusters::{DirTarget, rank_migration_sources, rank_migration_targets};
 
 use super::cluster_not_found;
 use super::imported_modpacks::ImportedModpacksSection;
@@ -171,6 +173,19 @@ impl Component for ClusterSettings {
         } else {
             Vec::new()
         };
+        let take_bundles_row: Vec<Element> = if mod_loader && !cluster.uses_bundles() {
+            vec![
+                TakeBundlesRow {
+                    cluster_id,
+                    name: cluster.name.clone(),
+                    mc_version: cluster.mc_version.clone(),
+                    loader: cluster.mc_loader,
+                }
+                .into_element(),
+            ]
+        } else {
+            Vec::new()
+        };
         let problem_mod_row: Vec<Element> = if mod_loader {
             vec![super::FindProblemModRow { cluster_id }.into_element()]
         } else {
@@ -257,6 +272,7 @@ impl Component for ClusterSettings {
                         }
                         .into_element(),
                     ))
+                    .append_children(take_bundles_row)
                     .append_children(copy_mod_files_row)
                     .append_children(migrate_row)
                     .child(section_header(t(
@@ -723,6 +739,45 @@ impl Component for VerifyFilesRow {
             t("oneclient.cluster.settings.verify.description"),
             button,
         )
+    }
+}
+
+#[derive(PartialEq)]
+struct TakeBundlesRow {
+    cluster_id: i64,
+    name: String,
+    mc_version: String,
+    loader: GameLoader,
+}
+
+impl Component for TakeBundlesRow {
+    fn render(&self) -> impl IntoElement {
+        let (cluster_id, name) = (self.cluster_id, self.name.clone());
+        let dispatch = use_dispatch();
+        let active = use_game_snapshot().is_active(cluster_id);
+        let busy = use_installs_snapshot().modpack_busy;
+        let enabled = !active && !busy;
+        let bundles = use_available_bundles(self.mc_version.clone(), self.loader);
+        if available_bundles(&bundles).is_none_or(|bundles| bundles.is_empty()) {
+            return rect().into_element();
+        }
+
+        let button = Button::new()
+            .small()
+            .secondary()
+            .enabled(enabled)
+            .maybe(enabled, |el| {
+                el.on_press(move |_| dispatch.take_offered_bundles(cluster_id, name.clone()))
+            })
+            .text(t("oneclient.cluster.settings.take_bundles.button"));
+
+        settings_row(
+            IconType::LayersThree01,
+            t("oneclient.cluster.settings.take_bundles.title"),
+            t("oneclient.cluster.settings.take_bundles.description"),
+            button,
+        )
+        .into_element()
     }
 }
 
@@ -1517,46 +1572,36 @@ impl Component for MigrateFromRow {
         let checking = use_release_migration_checking(cluster_id);
         let game = use_game_snapshot();
         let clusters = settled_or_loading(&use_clusters()).unwrap_or_default();
-        let mut picked = use_state(|| None::<i64>);
         let mut menu_at = use_state(|| None::<(f32, f32)>);
         let mut creating = use_state(|| false);
         let is_source = use_is_migration_source(cluster_id);
-        let source_loader = clusters
-            .iter()
-            .find(|cluster| cluster.id == cluster_id)
-            .map(|cluster| cluster.mc_loader);
+        let this = clusters.iter().find(|cluster| cluster.id == cluster_id);
+        let source_loader = this.map(|cluster| cluster.mc_loader);
 
-        let mut sources: Vec<Cluster> = clusters
-            .iter()
-            .find(|cluster| cluster.id == cluster_id)
-            .map(|this| rank_migration_sources(this, &clusters))
+        let routes: Vec<(i64, i64)> = this
+            .map(|this| {
+                rank_migration_sources(this, &clusters)
+                    .iter()
+                    .map(|source| (cluster_id, source.id))
+                    .chain(
+                        rank_migration_targets(this, &clusters)
+                            .iter()
+                            .map(|target| (target.id, cluster_id)),
+                    )
+                    .collect()
+            })
             .unwrap_or_default();
-        let has_partners = !sources.is_empty();
-        let migratable = use_migratable_routes(
-            sources
-                .iter()
-                .map(|source| (cluster_id, source.id))
-                .collect(),
-        );
-        sources.retain(|source| migratable.contains(&(cluster_id, source.id)));
-
-        let selected = picked
-            .read()
-            .and_then(|id| sources.iter().find(|source| source.id == id))
-            .or_else(|| sources.first())
-            .cloned();
-        let selected_pair = selected.as_ref().map(|source| (cluster_id, source.id));
-        let running = selected_pair
-            .is_some_and(|(target, source)| game.is_running(target) || game.is_running(source));
-        let updating = selected_pair.is_some_and(|(target, _)| game.is_checking_updates(target));
+        let has_partners = !routes.is_empty();
+        let migratable = use_migratable_routes(routes.clone());
+        let can_migrate = routes.iter().any(|route| migratable.contains(route));
+        let running = game.is_running(cluster_id);
+        let updating = game.is_checking_updates(cluster_id);
 
         let mut button = Button::new()
             .secondary()
-            .enabled(selected_pair.is_some() && !checking && !running && !updating)
+            .enabled(can_migrate && !checking && !running && !updating)
             .on_press(move |_| {
-                if let Some((target, source)) = selected_pair {
-                    dispatch.open_manual_migration(target, source);
-                }
+                dispatch.open_manual_migration(cluster_id, MigrationDirection::Into, None);
             });
         button = if checking {
             button
@@ -1573,32 +1618,13 @@ impl Component for MigrateFromRow {
         if updating {
             button = button.tooltip(t("oneclient.cluster.settings.migrate.update_check_running"));
         }
-
-        let picker: Element = if sources.is_empty() {
-            label()
-                .text(if has_partners {
-                    t("oneclient.cluster.settings.migrate.nothing")
-                } else {
-                    t("oneclient.cluster.settings.migrate.no_partners")
-                })
-                .font_size(text_size(12.))
-                .color(colors::fg_secondary())
-                .into_element()
-        } else {
-            ClusterPickerButton {
-                label: selected
-                    .as_ref()
-                    .map(|source| tf("oneclient.cluster.settings.migrate.from", &[&source.name]))
-                    .unwrap_or_default(),
-                selected: selected.as_ref().map(|source| source.id),
-                only: Some(sources.iter().map(|source| source.id).collect()),
-                width: Size::px(220.),
-                height: 34.,
-                disabled: false,
-                on_pick: (move |cluster: Cluster| picked.set(Some(cluster.id))).into(),
-            }
-            .into_element()
-        };
+        if !can_migrate {
+            button = button.tooltip(if has_partners {
+                t("oneclient.cluster.settings.migrate.nothing")
+            } else {
+                t("oneclient.cluster.settings.migrate.no_partners")
+            });
+        }
 
         let menu = (*menu_at.read()).map(|(x, y)| {
             ContextMenu::new(x, y)
@@ -1622,7 +1648,6 @@ impl Component for MigrateFromRow {
                     .horizontal()
                     .cross_align(Alignment::Center)
                     .spacing(8.)
-                    .child(picker)
                     .child(button)
                     .maybe_child(
                         (is_source && source_loader.is_some())

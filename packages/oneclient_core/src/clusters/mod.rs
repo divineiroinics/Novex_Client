@@ -1,4 +1,4 @@
-mod java_override;
+pub(crate) mod java_override;
 mod loader_update;
 mod migrate;
 pub(crate) mod modpack;
@@ -33,8 +33,9 @@ pub use prepare::{
 };
 pub use provision::{ensure_from_bundles, ensure_from_versions};
 pub use release_migration::{
-    OfferLookup, ReleaseMigrationOffer, can_migrate_manually, copy_configs, manual_migration_offer,
-    rank_migration_sources, record_new_versions, release_migration_offer,
+    MigrationPartners, OfferLookup, ReleaseMigrationOffer, can_migrate_manually, copy_configs,
+    manual_migration_partners, rank_migration_sources, rank_migration_targets, record_new_versions,
+    release_migration_offer,
 };
 pub use reset::{ResetClaim, ResetReport, is_resetting, reset_cluster, reset_unfinished};
 pub use share::{

@@ -485,7 +485,6 @@ pub struct StoreData {
     pub bundles: Vec<BundleInfo>,
     pub failed: bool,
     pub missing: Vec<CosmeticType>,
-    pub featured_failed: bool,
 }
 
 impl StoreData {
@@ -555,7 +554,6 @@ impl QueryCapability for StoreQuery {
             .filter(|(_, result)| result.is_err())
             .map(|(kind, _)| *kind)
             .collect();
-        let featured_failed = popular.is_err() || newest.is_err() || bundles.is_err();
         Ok(StoreData {
             by_type: per_type
                 .into_iter()
@@ -575,7 +573,6 @@ impl QueryCapability for StoreQuery {
                 .collect(),
             failed,
             missing,
-            featured_failed,
         })
     }
 }
@@ -601,6 +598,31 @@ impl QueryCapability for TransactionsQuery {
 
 pub fn use_store() -> UseQuery<StoreQuery> {
     use_query(Query::new(StoreKeys, StoreQuery).stale_time(Duration::from_secs(5 * 60)))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct StoreSuggestQuery;
+
+impl QueryCapability for StoreSuggestQuery {
+    type Ok = Vec<api::StoreSuggestion>;
+    type Err = String;
+    type Keys = String;
+
+    async fn run(&self, text: &Self::Keys) -> Result<Self::Ok, Self::Err> {
+        api::suggest_store(text).await.map_err(plus_message)
+    }
+}
+
+/// Live search dropdown rows; idle while `text` is blank
+pub fn use_store_suggestions(text: &str) -> UseQuery<StoreSuggestQuery> {
+    let text = text.trim();
+    use_query(
+        Query::new(
+            (!text.is_empty()).then(|| text.to_string()),
+            StoreSuggestQuery,
+        )
+        .stale_time(Duration::from_secs(60)),
+    )
 }
 
 pub fn use_transactions(account: Uuid) -> UseQuery<TransactionsQuery> {
@@ -792,10 +814,10 @@ pub async fn invalidate_wardrobe_queries() {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WardrobeAction {
+    /// Slot changes sent together, so moving a cosmetic between slots is one request
     Equip {
         account: Uuid,
-        slot: BodySlot,
-        cosmetic: Option<i32>,
+        changes: Vec<(BodySlot, Option<i32>)>,
         name: String,
     },
     MojangCape {
@@ -892,16 +914,11 @@ pub enum WardrobeAction {
 impl WardrobeAction {
     pub fn pending(&self) -> Option<String> {
         match self {
-            Self::Equip {
-                cosmetic: Some(_),
-                name,
-                ..
-            } => Some(tf("oneclient.wardrobe.pending.equipping", &[&name])),
-            Self::Equip {
-                cosmetic: None,
-                name,
-                ..
-            } => Some(tf("oneclient.wardrobe.pending.unequipping", &[&name])),
+            Self::Equip { changes, name, .. } => Some(if equips(changes) {
+                tf("oneclient.wardrobe.pending.equipping", &[&name])
+            } else {
+                tf("oneclient.wardrobe.pending.unequipping", &[&name])
+            }),
             Self::MojangCape {
                 cape: Some(_),
                 name,
@@ -1123,22 +1140,21 @@ async fn save_worn_skin(
     ))
 }
 
+fn equips(changes: &[(BodySlot, Option<i32>)]) -> bool {
+    changes.iter().any(|(_, cosmetic)| cosmetic.is_some())
+}
+
 async fn run_action(account: &MinecraftAccount, action: &WardrobeAction) -> Result<String, String> {
     let state = crate::launcher::state().map_err(|err| err.to_string())?;
     let requester = &state.services.requester;
 
     match action {
-        WardrobeAction::Equip {
-            slot,
-            cosmetic,
-            name,
-            ..
-        } => {
-            let changes = HashMap::from([(*slot, *cosmetic)]);
-            api::set_equipped(account, &changes)
+        WardrobeAction::Equip { changes, name, .. } => {
+            let map: HashMap<_, _> = changes.iter().copied().collect();
+            api::set_equipped(account, &map)
                 .await
                 .map_err(plus_message)?;
-            Ok(if cosmetic.is_some() {
+            Ok(if equips(changes) {
                 tf("oneclient.wardrobe.equip.equipped", &[&name])
             } else {
                 tf("oneclient.wardrobe.equip.unequipped", &[&name])
@@ -1384,7 +1400,7 @@ async fn checkout(account: &MinecraftAccount, products: &[String]) -> Result<Str
     if products.is_empty() {
         return Err(t("oneclient.wardrobe.checkout.empty").into());
     }
-    let url = api::create_checkout(account, products)
+    let checkout = api::create_checkout(account, products)
         .await
         .map_err(|err| match err {
             PlusError::Api { status: 409, body } if !body.trim().is_empty() => {
@@ -1395,7 +1411,10 @@ async fn checkout(account: &MinecraftAccount, products: &[String]) -> Result<Str
             }
             other => plus_message(other),
         })?;
-    crate::platform::open_url(&url);
+    if checkout.completed {
+        return Ok(t("oneclient.wardrobe.checkout.completed").into());
+    }
+    crate::platform::open_url(&checkout.url);
     Ok(t("oneclient.wardrobe.checkout.opened").into())
 }
 

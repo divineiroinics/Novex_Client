@@ -176,6 +176,15 @@ pub async fn required_java_major(
     cluster_id: i64,
 ) -> LauncherResult<Option<u32>> {
     let cluster = state.clusters.get(cluster_id).await?;
+    let info = cluster_version_info(state, cluster_id).await?;
+    Ok(super::java_override::effective_java_major(state, &cluster, &info).await)
+}
+
+pub(crate) async fn cluster_version_info(
+    state: &Arc<LauncherState>,
+    cluster_id: i64,
+) -> LauncherResult<VersionInfo> {
+    let cluster = state.clusters.get(cluster_id).await?;
     let mc_version = oneclient_common::version::normalize_mc_version_input(&cluster.mc_version);
 
     let info = {
@@ -204,7 +213,7 @@ pub async fn required_java_major(
         .await?
     };
 
-    Ok(info.java_version.map(|java| java.major_version))
+    Ok(info)
 }
 
 pub(crate) async fn resolved_loader_version(
@@ -261,9 +270,9 @@ pub async fn estimate_cluster_download(
 
     let mut total = game_download_bytes(&state.services, &info).await;
 
-    if let Some(java) = &info.java_version {
+    if let Some(major) = super::java_override::effective_java_major(state, &cluster, &info).await {
         let installed = state.java.list_runtimes().await.unwrap_or_default();
-        if !installed.iter().any(|rt| rt.major == java.major_version) {
+        if !installed.iter().any(|rt| rt.major == major) {
             total += JRE_ESTIMATE_BYTES;
         }
     }
@@ -316,10 +325,8 @@ async fn install_cluster(
     )
     .await?;
 
-    let java_major = version_info
-        .java_version
-        .as_ref()
-        .map(|v| v.major_version)
+    let java_major = super::java_override::effective_java_major(state, cluster, &version_info)
+        .await
         .ok_or(ClusterError::MissingJavaVersion)?;
 
     let java = if let Some(runtime) = state
@@ -333,6 +340,7 @@ async fn install_cluster(
             .java
             .prepare(
                 java_major,
+                crate::game::natives::native_java_ok(&version_info),
                 search_for_java,
                 auto_install_java,
                 Some(progress),

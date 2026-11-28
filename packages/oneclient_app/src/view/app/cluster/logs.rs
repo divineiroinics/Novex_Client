@@ -125,8 +125,8 @@ impl Component for ClusterLogs {
         let logs_query = use_cluster_logs(cluster_id);
         let upload = use_upload_log();
         let action = use_log_action();
-        let search = use_state(String::new);
-        let level = use_state(|| LevelFilter::All);
+        let mut search = use_state(String::new);
+        let mut level = use_state(|| LevelFilter::All);
         let mut confirm = use_state(|| None::<Confirm>);
         let mut category = use_state(|| Category::Logs);
         let mut selected = use_state(PathBuf::new);
@@ -258,6 +258,15 @@ impl Component for ClusterLogs {
                 .map(|line| Arc::<str>::from(line.text.as_str()))
                 .collect(),
         );
+        let viewer_numbers: Arc<Vec<usize>> =
+            Arc::new(lines.iter().map(|line| line.number).collect());
+        let filtered = !search.read().trim().is_empty() || *level.read() != LevelFilter::All;
+        let on_jump = filtered.then(|| {
+            EventHandler::from(move |()| {
+                search.set(String::new());
+                level.set(LevelFilter::All);
+            })
+        });
 
         let body = rect()
             .vertical()
@@ -274,14 +283,17 @@ impl Component for ClusterLogs {
                 dump_button,
             ))
             .child(rect().width(Size::fill()).height(Size::flex(1.0)).child(
-                LogViewer::new("", viewer_lines).header(viewer_header(
-                    search,
-                    level,
-                    confirm,
-                    has_log,
-                    upload_path,
-                    search_id,
-                )),
+                LogViewer::new("", viewer_lines)
+                    .numbers(viewer_numbers)
+                    .on_jump(on_jump)
+                    .header(viewer_header(
+                        search,
+                        level,
+                        confirm,
+                        has_log,
+                        upload_path,
+                        search_id,
+                    )),
             ));
 
         cluster_content()
@@ -394,6 +406,39 @@ pub fn viewer_header(
     upload_path: Option<PathBuf>,
     search_id: AccessibilityId,
 ) -> impl IntoElement {
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .child(
+            rect()
+                .width(Size::fill())
+                .padding(Gaps::new_symmetric(10., 14.))
+                .child(viewer_controls(
+                    search,
+                    level,
+                    confirm,
+                    has_log,
+                    upload_path,
+                    search_id,
+                )),
+        )
+        .child(
+            rect()
+                .width(Size::fill())
+                .height(Size::px(1.))
+                .background(colors::component_border()),
+        )
+        .into_element()
+}
+
+pub fn viewer_controls(
+    search: State<String>,
+    level: State<LevelFilter>,
+    confirm: State<Option<Confirm>>,
+    has_log: bool,
+    upload_path: Option<PathBuf>,
+    search_id: AccessibilityId,
+) -> impl IntoElement {
     let on_key_down = move |e: Event<KeyboardEventData>| {
         let find = matches!(&e.key, Key::Character(c) if c.as_str().eq_ignore_ascii_case("f"))
             && e.modifiers.contains(Modifiers::ctrl_or_meta());
@@ -420,13 +465,12 @@ pub fn viewer_header(
         }
     };
 
-    let row = rect()
+    rect()
         .horizontal()
         .width(Size::fill())
         .cross_align(Alignment::Center)
         .content(Content::Flex)
         .spacing(10.)
-        .padding(Gaps::new_symmetric(10., 14.))
         .on_global_key_down(on_key_down)
         .child(rect().width(Size::flex(1.0)).child(search_input))
         .child(
@@ -446,18 +490,7 @@ pub fn viewer_header(
                 )
                 .into_element(),
         )
-        .child(UploadToMclogs::new(upload_path, confirm));
-
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .child(row)
-        .child(
-            rect()
-                .width(Size::fill())
-                .height(Size::px(1.))
-                .background(colors::component_border()),
-        )
+        .child(UploadToMclogs::new(upload_path, confirm))
         .into_element()
 }
 

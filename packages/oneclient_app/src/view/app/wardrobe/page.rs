@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
+use std::time::Duration;
 
 use freya::animation::*;
 use freya::prelude::*;
@@ -16,25 +17,26 @@ use uuid::Uuid;
 use super::parts::{
     AnchorChip, BACK_YAW, Badge, BadgeStyle, CAPE_ZOOM, CARD_CHROME, CARD_WIDTH, CapeSource,
     CoverThumb, FRONT_YAW, GRID_GAP, InfoHeading, LookThumb, MenuAction, Rename, SectionChip,
-    Swatch, WardrobeCard, detail_text, divider, library_intro, notice, price_label,
+    Swatch, WardrobeCard, detail_text, divider, library_intro, notice, price_label, store_label,
 };
 use super::preview::{HistoryList, RightColumn};
 use crate::components::{
-    Button, Dropdown, Icon, IconType, ScrollArea, ScrollAreaCtx, TextInput, centered_spinner,
+    Button, Dropdown, Icon, IconType, ScrollArea, ScrollAreaCtx, Spinner, TextInput,
+    centered_spinner,
 };
 use crate::hooks::wardrobe::{
     MojangLookQuery, OutfitsQuery, PlusCosmeticsQuery, SkinsQuery, StoreData, StoreQuery,
     UseWardrobeAction, WardrobeAction, active_cape, active_skin, invalidate_wardrobe_queries,
     plus_message, use_mojang_look, use_outfits, use_plus_cosmetics, use_skin_library, use_store,
-    use_wardrobe_action,
+    use_store_suggestions, use_wardrobe_action,
 };
 use crate::hooks::{
     mutation_is_running, query_error, query_is_loading, settled_or_loading, try_default_account,
-    use_current_account,
+    use_current_account, use_debounced, use_overlay_claim_when,
 };
 use crate::i18n::{t, tf};
-use crate::theme::{colors, text_size};
-use crate::ui::centered_note;
+use crate::theme::{colors, rounded, text_size};
+use crate::ui::{border_all_color, centered_note};
 use crate::view::app::cluster::confirm_dialog;
 
 const RIGHT_COLUMN_MIN_WIDTH: f32 = 320.;
@@ -71,19 +73,17 @@ pub(super) const BACK_VIEW_TYPES: [CosmeticType; 3] = [
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Section {
-    Featured,
+    Cosmetics,
     Outfits,
     Skins,
-    Emotes,
-    Cosmetics,
 }
 
-fn section_tabs() -> [(Section, &'static str, IconType); 5] {
+fn section_tabs() -> [(Section, &'static str, IconType); 3] {
     [
         (
-            Section::Featured,
-            t("oneclient.wardrobe.section.featured"),
-            IconType::Rocket02,
+            Section::Cosmetics,
+            t("oneclient.wardrobe.section.cosmetics"),
+            IconType::Colors,
         ),
         (
             Section::Outfits,
@@ -94,16 +94,6 @@ fn section_tabs() -> [(Section, &'static str, IconType); 5] {
             Section::Skins,
             t("oneclient.wardrobe.section.skins"),
             IconType::Brush01,
-        ),
-        (
-            Section::Emotes,
-            t("oneclient.wardrobe.section.emotes"),
-            IconType::Play,
-        ),
-        (
-            Section::Cosmetics,
-            t("oneclient.wardrobe.section.cosmetics"),
-            IconType::Colors,
         ),
     ]
 }
@@ -190,7 +180,7 @@ pub(super) struct WardrobeData {
     pub grid_width: f32,
     pub sort: Sort,
     pub query: String,
-    pub variant_picks: HashMap<i32, i32>,
+    pub variant_picks: HashMap<i32, Pick>,
     pub store_picks: HashMap<i32, i32>,
     pub cart_keys: Vec<String>,
     pub owned: HashSet<i32>,
@@ -258,26 +248,55 @@ impl WardrobeData {
             })
     }
 
-    pub fn equipped_slot(&self, group: &CosmeticGroup) -> Option<(BodySlot, i32)> {
-        let plus = self.plus.as_ref()?;
-        let mut entries: Vec<(BodySlot, i32)> = plus
-            .equipped
+    /// The slots this group is worn in, with the variant in each
+    pub fn worn(&self, group: &CosmeticGroup) -> Pick {
+        let mut worn: Pick = self
+            .plus
             .iter()
+            .flat_map(|plus| plus.equipped.iter())
+            .filter(|(_, id)| group.variants.iter().any(|variant| variant.id == **id))
             .map(|(slot, id)| (*slot, *id))
             .collect();
-        entries.sort_by_key(|(slot, _)| *slot);
-        entries
+        worn.sort();
+        worn
+    }
+
+    /// What the preview shows and Equip applies: the user's pick, else what is worn, else the first variant
+    pub fn pick(&self, group: &CosmeticGroup) -> Pick {
+        if let Some(pick) = self.variant_picks.get(&group.id) {
+            return pick.clone();
+        }
+        let worn = self.worn(group);
+        if !worn.is_empty() {
+            return worn;
+        }
+        group
+            .variants
+            .first()
+            .map(|variant| variant_pick(group, variant))
+            .unwrap_or_default()
+    }
+
+    /// The pick with each variant swapped for the one matching the skin's arm model
+    pub fn resolved_pick(&self, group: &CosmeticGroup) -> Pick {
+        let mut pick: Pick = self
+            .pick(group)
             .into_iter()
-            .find(|(_, id)| group.variants.iter().any(|variant| variant.id == *id))
+            .map(|(slot, id)| (slot, group.variant_for_skin(id, self.slim)))
+            .collect();
+        pick.sort();
+        pick
+    }
+
+    pub fn pick_worn(&self, group: &CosmeticGroup) -> bool {
+        let worn = self.worn(group);
+        !worn.is_empty() && worn == self.resolved_pick(group)
     }
 
     pub fn selected_variant<'a>(&self, group: &'a CosmeticGroup) -> Option<&'a CosmeticVariant> {
-        let wanted = self
-            .equipped_slot(group)
-            .map(|(_, id)| id)
-            .or_else(|| self.variant_picks.get(&group.id).copied());
-        wanted
-            .and_then(|id| group.variants.iter().find(|variant| variant.id == id))
+        self.pick(group)
+            .first()
+            .and_then(|(_, id)| group.variants.iter().find(|variant| variant.id == *id))
             .or_else(|| group.variants.first())
     }
 
@@ -297,6 +316,7 @@ impl WardrobeData {
                 variant_order: 0,
                 asset_id: item.asset_id,
                 cover_asset_id: item.cover_asset_id,
+                preview_url: item.preview_url.clone(),
             })
     }
 
@@ -357,6 +377,16 @@ impl WardrobeData {
             .and_then(|entry| entry.cover_asset_id)
             .or(item.cover_asset_id)
             .map(api::asset_url)
+    }
+
+    pub fn preview_for_variant(&self, variant: i32) -> Option<String> {
+        let item = self.store.as_ref()?.containing_variant(variant)?;
+        item.variants
+            .iter()
+            .flatten()
+            .find(|entry| entry.id == variant)
+            .and_then(|entry| entry.preview_url.clone())
+            .or_else(|| item.preview_url.clone())
     }
 
     pub fn variant_cover(&self, variant: &CosmeticVariant) -> Option<String> {
@@ -437,12 +467,12 @@ impl WardrobeData {
     pub fn look_cosmetics(
         &self,
         equipped: &HashMap<BodySlot, i32>,
-        try_on: Option<(BodySlot, String)>,
+        try_on: Vec<(BodySlot, String)>,
     ) -> Vec<(BodySlot, String)> {
-        let tried = try_on.as_ref().map(|(slot, _)| *slot);
+        let tried: Vec<BodySlot> = try_on.iter().map(|(slot, _)| *slot).collect();
         let mut cosmetics: Vec<(BodySlot, String)> = equipped
             .iter()
-            .filter(|(slot, _)| Some(**slot) != tried)
+            .filter(|(slot, _)| !tried.contains(slot))
             .filter_map(|(slot, id)| Some((*slot, self.variant(*id)?.1.url.clone()?)))
             .chain(try_on)
             .filter(|(slot, _)| *slot != BodySlot::Cape)
@@ -519,7 +549,9 @@ pub(super) fn shop_thumbnail(
     variant: &StoreVariant,
     interactive: bool,
 ) -> Element {
-    if item.kind == CosmeticType::Cape
+    // Cards show the generated cover; only the big preview renders the cape on the player
+    if interactive
+        && item.kind == CosmeticType::Cape
         && let Some(asset) = variant.asset_id.or(item.asset_id)
     {
         return LookThumb {
@@ -530,7 +562,7 @@ pub(super) fn shop_thumbnail(
             emote: None,
             particle_color: None,
             yaw: BACK_YAW,
-            zoom: if interactive { 1.0 } else { CAPE_ZOOM },
+            zoom: 1.0,
             interactive,
         }
         .into_element();
@@ -543,7 +575,7 @@ pub(super) fn shop_thumbnail(
             uuid: data.uuid.clone(),
             skin: None,
             cape: data.current_cape(),
-            cosmetics: data.look_cosmetics(&data.equipped(), try_on),
+            cosmetics: data.look_cosmetics(&data.equipped(), try_on.into_iter().collect()),
             emote: emote.then_some(url),
             particle_color: data.particle_color(),
             yaw: if BACK_VIEW_TYPES.contains(&item.kind) {
@@ -566,98 +598,167 @@ pub(super) fn shop_thumbnail(
 }
 
 pub(super) fn equip_slot(group: &CosmeticGroup, variant: &CosmeticVariant) -> Option<BodySlot> {
-    let allowed = |slot: BodySlot| {
-        (variant.allowed_slots.is_empty() && group.allowed_slots.is_empty())
-            || variant.allowed_slots.contains(&slot)
-            || group.allowed_slots.contains(&slot)
+    // A variant's own slots win: a group can list both hands while each variant fits only one
+    let slots = if variant.allowed_slots.is_empty() {
+        &group.allowed_slots
+    } else {
+        &variant.allowed_slots
     };
     group
         .kind
         .default_slot()
-        .filter(|slot| allowed(*slot))
+        .filter(|slot| slots.is_empty() || slots.contains(slot))
         .or_else(|| {
-            variant
-                .allowed_slots
+            slots
                 .iter()
-                .chain(group.allowed_slots.iter())
                 .copied()
                 .find(|slot| *slot != BodySlot::Unknown)
         })
 }
 
-fn equip_action(
-    data: &WardrobeData,
-    group: &CosmeticGroup,
-    variant: &CosmeticVariant,
-) -> Option<WardrobeAction> {
-    equip_slot(group, variant).map(|slot| WardrobeAction::Equip {
-        account: data.account,
-        slot,
-        cosmetic: Some(group.variant_for_skin(variant.id, data.slim)),
-        name: group.name.clone(),
-    })
+/// Variants by the slot each is worn in; Poly+'s "Both" fills two slots at once
+pub(super) type Pick = Vec<(BodySlot, i32)>;
+
+pub(super) fn variant_pick(group: &CosmeticGroup, variant: &CosmeticVariant) -> Pick {
+    equip_slot(group, variant)
+        .map(|slot| vec![(slot, variant.id)])
+        .unwrap_or_default()
 }
 
+/// The hand a variant is limited to, if only one
+fn hand_side(group: &CosmeticGroup, variant: &CosmeticVariant) -> Option<BodySlot> {
+    let allows = |slot| {
+        if variant.allowed_slots.is_empty() {
+            group.kind == CosmeticType::Glove
+        } else {
+            variant.allowed_slots.contains(&slot)
+        }
+    };
+    match (allows(BodySlot::LeftHand), allows(BodySlot::RightHand)) {
+        (true, false) => Some(BodySlot::LeftHand),
+        (false, true) => Some(BodySlot::RightHand),
+        _ => None,
+    }
+}
+
+/// The variant chips as Poly+ builds them: one per name and hand, "Left"/"Right" added when both
+/// hands share a name, and a "Both" chip after each left and right pair
+pub(super) fn variant_options(group: &CosmeticGroup) -> Vec<(String, Pick)> {
+    let mut chips: Vec<(&str, Option<BodySlot>, &CosmeticVariant)> = Vec::new();
+    for variant in &group.variants {
+        let side = hand_side(group, variant);
+        if !chips
+            .iter()
+            .any(|(name, other, _)| *name == variant.name && *other == side)
+        {
+            chips.push((&variant.name, side, variant));
+        }
+    }
+    let labelled: Vec<(String, Option<BodySlot>, &CosmeticVariant)> = chips
+        .iter()
+        .map(|&(name, side, variant)| {
+            let shared = |other| {
+                chips
+                    .iter()
+                    .any(|(n, s, _)| *n == name && *s == Some(other))
+            };
+            let label = match side {
+                Some(BodySlot::LeftHand) if shared(BodySlot::RightHand) => format!("Left {name}"),
+                Some(BodySlot::RightHand) if shared(BodySlot::LeftHand) => format!("Right {name}"),
+                _ => name.to_string(),
+            };
+            (label, side, variant)
+        })
+        .collect();
+
+    let finish = |name: &str| {
+        name.split(' ')
+            .filter(|word| {
+                !word.eq_ignore_ascii_case("left") && !word.eq_ignore_ascii_case("right")
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let mut done: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for (label, side, variant) in &labelled {
+        if side.is_none() {
+            out.push((label.clone(), variant_pick(group, variant)));
+            continue;
+        }
+        let rest = finish(label);
+        if done.contains(&rest) {
+            continue;
+        }
+        let find = |want| {
+            labelled
+                .iter()
+                .find(|(l, s, _)| *s == Some(want) && finish(l) == rest)
+        };
+        let left = find(BodySlot::LeftHand);
+        let right = find(BodySlot::RightHand);
+        for (label, side, variant) in left.iter().chain(right.iter()) {
+            out.push((
+                label.clone(),
+                vec![(side.unwrap_or(BodySlot::RightHand), variant.id)],
+            ));
+        }
+        if let (Some((_, _, left)), Some((_, _, right))) = (left, right) {
+            let label = if rest.is_empty() {
+                t("oneclient.wardrobe.preview.both").to_string()
+            } else {
+                tf("oneclient.wardrobe.preview.both_named", &[&rest])
+            };
+            out.push((
+                label,
+                vec![
+                    (BodySlot::LeftHand, left.id),
+                    (BodySlot::RightHand, right.id),
+                ],
+            ));
+        }
+        done.push(rest);
+    }
+    out
+}
+
+/// Slot and variant name per piece, so slim/wide copies of a variant count as the same pick
+pub(super) fn pick_key(group: &CosmeticGroup, pick: &Pick) -> Vec<(BodySlot, String)> {
+    let mut key: Vec<_> = pick
+        .iter()
+        .filter_map(|(slot, id)| {
+            let variant = group.variants.iter().find(|variant| variant.id == *id)?;
+            Some((*slot, variant.name.clone()))
+        })
+        .collect();
+    key.sort();
+    key
+}
+
+/// Equips the picked variants, clearing any other slot the group is in, or unequips when the pick is already worn
 pub(super) fn toggle_owned(
     data: &WardrobeData,
     group: &CosmeticGroup,
 ) -> Result<WardrobeAction, String> {
-    let Some(variant) = data.selected_variant(group) else {
-        return Err(tf("oneclient.wardrobe.error.no_variant", &[&group.name]));
+    let worn = data.worn(group);
+    let pick = data.resolved_pick(group);
+    if pick.is_empty() {
+        return Err(tf("oneclient.wardrobe.error.cannot_equip", &[&group.name]));
+    }
+    let changes = if worn == pick {
+        worn.iter().map(|(slot, _)| (*slot, None)).collect()
+    } else {
+        worn.iter()
+            .filter(|(slot, _)| !pick.iter().any(|(picked, _)| picked == slot))
+            .map(|(slot, _)| (*slot, None))
+            .chain(pick.iter().map(|(slot, id)| (*slot, Some(*id))))
+            .collect()
     };
-    let wearing = |id: i32| {
-        group
-            .variants
-            .iter()
-            .any(|equipped| equipped.id == id && equipped.name == variant.name)
-    };
-    match data.equipped_slot(group) {
-        Some((slot, id)) if wearing(id) => Ok(WardrobeAction::Equip {
-            account: data.account,
-            slot,
-            cosmetic: None,
-            name: group.name.clone(),
-        }),
-        _ => equip_action(data, group, variant)
-            .ok_or_else(|| tf("oneclient.wardrobe.error.cannot_equip", &[&group.name])),
-    }
-}
-
-#[derive(Clone)]
-pub(super) struct VariantPick {
-    account: Uuid,
-    group: CosmeticGroup,
-    equipped: Option<(BodySlot, i32)>,
-    slim: bool,
-}
-
-impl VariantPick {
-    pub fn new(data: &WardrobeData, group: &CosmeticGroup) -> Self {
-        Self {
-            account: data.account,
-            group: group.clone(),
-            equipped: data.equipped_slot(group),
-            slim: data.slim,
-        }
-    }
-
-    pub fn action(&self, variant_id: i32) -> Option<WardrobeAction> {
-        let (slot, equipped) = self.equipped?;
-        let resolved = self.group.variant_for_skin(variant_id, self.slim);
-        if equipped == resolved {
-            return None;
-        }
-        self.group
-            .variants
-            .iter()
-            .any(|variant| variant.id == variant_id)
-            .then(|| WardrobeAction::Equip {
-                account: self.account,
-                slot,
-                cosmetic: Some(resolved),
-                name: self.group.name.clone(),
-            })
-    }
+    Ok(WardrobeAction::Equip {
+        account: data.account,
+        changes,
+        name: group.name.clone(),
+    })
 }
 
 pub(super) fn toggle_mojang_action(data: &WardrobeData, cape: &MojangCape) -> WardrobeAction {
@@ -812,7 +913,7 @@ pub(super) struct Shared {
     pub adding_skin: State<bool>,
     pub show_cart: State<bool>,
     pub cart: State<Vec<CartEntry>>,
-    pub variant_picks: State<HashMap<i32, i32>>,
+    pub variant_picks: State<HashMap<i32, Pick>>,
     pub store_picks: State<HashMap<i32, i32>>,
     pub status: State<Option<String>>,
     pub deleting: State<Option<(Selection, String, WardrobeAction)>>,
@@ -889,7 +990,7 @@ impl Component for WardrobeBody {
         let store_query = use_store();
         let action = use_wardrobe_action();
 
-        let section = use_state(|| Section::Featured);
+        let section = use_state(|| Section::Cosmetics);
         let show_history = use_state(|| false);
         let sort = use_state(|| Sort::Popular);
         let query = use_state(String::new);
@@ -904,7 +1005,7 @@ impl Component for WardrobeBody {
             adding_skin: use_state(|| false),
             show_cart: use_state(|| false),
             cart: use_state(Vec::<CartEntry>::new),
-            variant_picks: use_state(HashMap::<i32, i32>::new),
+            variant_picks: use_state(HashMap::<i32, Pick>::new),
             store_picks: use_state(HashMap::<i32, i32>::new),
             status: use_state(|| None::<String>),
             deleting: use_state(|| None::<(Selection, String, WardrobeAction)>),
@@ -995,11 +1096,9 @@ impl Component for WardrobeBody {
             Vec::new()
         } else {
             match current_section {
-                Section::Featured => featured_content(&ctx),
+                Section::Cosmetics => cosmetics_content(&ctx),
                 Section::Outfits => outfits_content(&ctx),
                 Section::Skins => skins_content(&ctx),
-                Section::Emotes => emotes_content(&ctx),
-                Section::Cosmetics => cosmetics_content(&ctx),
             }
         };
         if !history
@@ -1125,18 +1224,13 @@ impl Component for WardrobeBody {
                                     .font_weight(FontWeight::SEMI_BOLD)
                                     .color(colors::fg_primary()),
                             )
-                            .child(
-                                TextInput::new(query)
-                                    .placeholder(t("oneclient.wardrobe.search"))
-                                    .compact()
-                                    .width(Size::px(260.))
-                                    .leading(
-                                        Icon::new(IconType::SearchMd)
-                                            .size(14.)
-                                            .color(colors::fg_secondary())
-                                            .into_element(),
-                                    ),
-                            ),
+                            .child(StoreSearch {
+                                data: data.clone(),
+                                query,
+                                shared,
+                                suggest: data.plus_available()
+                                    && current_section == Section::Cosmetics,
+                            }),
                     )
                     .child(
                         rect()
@@ -1177,13 +1271,245 @@ impl Component for WardrobeBody {
     }
 }
 
+const SEARCH_WIDTH: f32 = 260.;
+const SEARCH_DEBOUNCE: Duration = Duration::from_millis(250);
+
+/// The search box, plus a live dropdown of store matches while typing on the
+/// cosmetics tab. The grid below still filters by the same text.
+#[derive(PartialEq)]
+struct StoreSearch {
+    data: WardrobeData,
+    query: State<String>,
+    shared: Shared,
+    suggest: bool,
+}
+
+impl Component for StoreSearch {
+    fn render(&self) -> impl IntoElement {
+        let query = self.query;
+        let text = query.read().trim().to_string();
+        let settled = use_debounced(text.clone(), SEARCH_DEBOUNCE);
+        let settled = settled.read().clone();
+        let suggestions = use_store_suggestions(if self.suggest { &settled } else { "" });
+        let mut open = use_state(|| false);
+        let mut input_area = use_state(|| None::<Area>);
+        let mut panel_area = use_state(|| None::<Area>);
+
+        use_side_effect_with_deps(&text, move |text: &String| {
+            open.set_if_modified(!text.is_empty());
+        });
+        let showing = self.suggest && *open.read() && !text.is_empty();
+        use_overlay_claim_when(showing);
+
+        let on_global_pointer_up = move |e: Event<PointerEventData>| {
+            let point = e.global_location();
+            let point = (point.x as f32, point.y as f32).into();
+            let inside = |area: Option<Area>| area.is_some_and(|area| area.contains(point));
+            if !inside(*input_area.peek()) && !inside(*panel_area.peek()) {
+                open.set_if_modified(false);
+            }
+        };
+
+        let panel = showing.then(|| {
+            let mut rows = rect().vertical().width(Size::fill()).spacing(2.);
+            let searching = text != settled || query_is_loading(&suggestions);
+            let results = settled_or_loading(&suggestions).unwrap_or_default();
+            if searching && results.is_empty() {
+                rows = rows.child(search_note(
+                    Some(Spinner::new(14.).into_element()),
+                    t("oneclient.wardrobe.search.searching").to_string(),
+                ));
+            } else if let Some(error) = query_error(&suggestions).filter(|_| results.is_empty()) {
+                rows = rows.child(search_note(None, error));
+            } else if results.is_empty() {
+                rows = rows.child(search_note(
+                    None,
+                    tf("oneclient.wardrobe.search.no_results", &[&text]),
+                ));
+            } else {
+                let ctx = GridCtx {
+                    data: &self.data,
+                    shared: self.shared,
+                };
+                for item in results {
+                    let select = ctx.select(suggestion_selection(&self.data, item.id));
+                    rows = rows.child(SuggestionRow {
+                        item,
+                        on_press: EventHandler::new(move |()| {
+                            open.set(false);
+                            select.call(());
+                        }),
+                    });
+                }
+                rows = rows.child(
+                    rect()
+                        .width(Size::fill())
+                        .padding(Gaps::new(8., 10., 6., 10.))
+                        .cursor(CursorIcon::Pointer)
+                        .a11y_role(AccessibilityRole::Button)
+                        .on_press(move |_| open.set(false))
+                        .child(
+                            label()
+                                .text(tf("oneclient.wardrobe.search.see_all", &[&text]))
+                                .max_lines(1)
+                                .text_overflow(TextOverflow::Ellipsis)
+                                .font_size(text_size(12.))
+                                .color(colors::fg_secondary()),
+                        ),
+                );
+            }
+            rect().width(Size::px(0.)).height(Size::px(0.)).child(
+                rect()
+                    .layer(Layer::Overlay)
+                    .width(Size::px(SEARCH_WIDTH))
+                    .margin(Gaps::new(4., 0., 0., 0.))
+                    .padding(4.)
+                    .corner_radius(rounded(8.))
+                    .border(border_all_color(1., colors::component_border()))
+                    .background(colors::page_elevated())
+                    .on_sized(move |e: Event<SizedEventData>| {
+                        panel_area.set_if_modified(Some(e.area));
+                    })
+                    .child(rows),
+            )
+        });
+
+        rect()
+            .width(Size::px(SEARCH_WIDTH))
+            .on_global_pointer_up(on_global_pointer_up)
+            .on_global_key_down(move |e: Event<KeyboardEventData>| {
+                if e.key == Key::Named(NamedKey::Escape) {
+                    open.set_if_modified(false);
+                }
+            })
+            .child(
+                rect()
+                    .width(Size::fill())
+                    .on_sized(move |e: Event<SizedEventData>| {
+                        input_area.set_if_modified(Some(e.area));
+                    })
+                    .on_press(move |_| {
+                        if !query.peek().trim().is_empty() {
+                            open.set_if_modified(true);
+                        }
+                    })
+                    .child(
+                        TextInput::new(query)
+                            .placeholder(t("oneclient.wardrobe.search"))
+                            .compact()
+                            .width(Size::fill())
+                            .on_submit(move |_| open.set(false))
+                            .leading(
+                                Icon::new(IconType::SearchMd)
+                                    .size(14.)
+                                    .color(colors::fg_secondary())
+                                    .into_element(),
+                            ),
+                    ),
+            )
+            .maybe_child(panel)
+    }
+}
+
+/// Owned items open as owned so the preview offers equip instead of buy
+fn suggestion_selection(data: &WardrobeData, id: i32) -> Selection {
+    if data.emotes().iter().any(|emote| emote.id == id) {
+        Selection::Emote(id)
+    } else if let Some((group, _)) = data.variant(id) {
+        Selection::Owned(group.id)
+    } else {
+        Selection::Shop(id)
+    }
+}
+
+fn search_note(leading: Option<Element>, text: String) -> Element {
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .padding(Gaps::new_symmetric(10., 10.))
+        .cross_align(Alignment::Center)
+        .spacing(8.)
+        .maybe_child(leading)
+        .child(
+            label()
+                .text(text)
+                .max_lines(1)
+                .text_overflow(TextOverflow::Ellipsis)
+                .font_size(text_size(13.))
+                .color(colors::fg_secondary()),
+        )
+        .into_element()
+}
+
+#[derive(PartialEq)]
+struct SuggestionRow {
+    item: api::StoreSuggestion,
+    on_press: EventHandler<()>,
+}
+
+impl Component for SuggestionRow {
+    fn render(&self) -> impl IntoElement {
+        let mut hovered = use_state(|| false);
+        let on_press = self.on_press.clone();
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .padding(6.)
+            .spacing(10.)
+            .cross_align(Alignment::Center)
+            .corner_radius(rounded(6.))
+            .background(if *hovered.read() {
+                colors::ghost_overlay_hover()
+            } else {
+                Color::TRANSPARENT
+            })
+            .cursor(CursorIcon::Pointer)
+            .a11y_role(AccessibilityRole::Button)
+            .a11y_alt(self.item.name.clone())
+            .on_pointer_enter(move |_| hovered.set(true))
+            .on_pointer_leave(move |_| hovered.set(false))
+            .on_press(move |_| on_press.call(()))
+            .child(
+                rect()
+                    .width(Size::px(36.))
+                    .height(Size::px(36.))
+                    .corner_radius(rounded(5.))
+                    .background(colors::page())
+                    .overflow(Overflow::Clip)
+                    .child(CoverThumb {
+                        url: self.item.cover_asset_id.map(api::asset_url),
+                    }),
+            )
+            .child(
+                rect()
+                    .vertical()
+                    .width(Size::flex(1.0))
+                    .spacing(2.)
+                    .child(
+                        label()
+                            .text(self.item.name.clone())
+                            .max_lines(1)
+                            .text_overflow(TextOverflow::Ellipsis)
+                            .font_size(text_size(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .color(colors::fg_primary()),
+                    )
+                    .child(
+                        label()
+                            .text(type_label(self.item.kind))
+                            .max_lines(1)
+                            .font_size(text_size(11.))
+                            .color(colors::fg_secondary()),
+                    ),
+            )
+    }
+}
+
 fn section_key(section: Section, history: bool) -> u64 {
     let base = match section {
-        Section::Featured => 1,
+        Section::Cosmetics => 1,
         Section::Outfits => 2,
         Section::Skins => 3,
-        Section::Emotes => 4,
-        Section::Cosmetics => 5,
     };
     if history { base + 10 } else { base }
 }
@@ -1221,7 +1547,6 @@ impl Component for AnchorRow {
         });
         let mut row = rect()
             .horizontal()
-            .width(Size::fill())
             .cross_align(Alignment::Center)
             .spacing(4.);
         if labels.len() > 1 {
@@ -1279,10 +1604,17 @@ impl Header {
         let sections: Vec<(Section, &str, IconType)> = if store_enabled {
             section_tabs().to_vec()
         } else {
-            vec![section_tabs()[4]]
+            vec![section_tabs()[0]]
         };
 
-        let mut chips = rect().horizontal().width(Size::flex(1.0)).spacing(8.);
+        // Scrolls instead of squashing when the sort and cart controls crowd narrow windows
+        let mut chips = ScrollView::new()
+            .direction(Direction::Horizontal)
+            .show_scrollbar(false)
+            .invert_scroll_wheel(true)
+            .width(Size::flex(1.0))
+            .height(Size::px(33.))
+            .spacing(8.);
         for (target, text, icon) in sections {
             chips = chips.child(SectionChip {
                 text,
@@ -1300,6 +1632,12 @@ impl Header {
         }
 
         let cart_size = shared.cart.read().len();
+        let sort_labels: Vec<String> = Sort::ALL
+            .iter()
+            .map(|sort| sort.label().to_string())
+            .collect();
+        let sort_selected = sort.read().label();
+        let mut status = shared.status;
         let top = rect()
             .horizontal()
             .width(Size::fill())
@@ -1308,57 +1646,8 @@ impl Header {
             .cross_align(Alignment::Center)
             .spacing(8.)
             .child(chips)
-            .maybe_child(store_enabled.then(|| {
-                Button::new()
-                    .primary()
-                    .on_press(move |_| {
-                        let open = !*show_cart.read();
-                        show_cart.set(open);
-                    })
-                    .text(tf("oneclient.wardrobe.cart.button", &[&cart_size]))
-            }));
-
-        let left = if history {
-            rect()
-                .width(Size::flex(1.0))
-                .child(
-                    label()
-                        .text(t("oneclient.wardrobe.history.title"))
-                        .font_size(text_size(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .color(colors::fg_primary()),
-                )
-                .into_element()
-        } else {
-            rect()
-                .width(Size::flex(1.0))
-                .child(AnchorRow {
-                    labels,
-                    anchors,
-                    scroll,
-                })
-                .into_element()
-        };
-
-        let sort_labels: Vec<String> = Sort::ALL
-            .iter()
-            .map(|sort| sort.label().to_string())
-            .collect();
-        let sort_selected = sort.read().label();
-        let mut status = shared.status;
-        let bottom = rect()
-            .horizontal()
-            .width(Size::fill())
-            .height(Size::px(33.))
-            .content(Content::Flex)
-            .cross_align(Alignment::Center)
-            .spacing(8.)
-            .child(left)
             .maybe_child(
-                (store_enabled
-                    && !history
-                    && matches!(current, Section::Emotes | Section::Cosmetics))
-                .then(|| {
+                (store_enabled && !history && current == Section::Cosmetics).then(|| {
                     Dropdown::new(sort_selected, sort_labels)
                         .width(Size::px(132.))
                         .height(Size::px(30.))
@@ -1427,7 +1716,55 @@ impl Header {
                         });
                     })
                     .child(Icon::new(IconType::RefreshCw01).size(14.)),
-            );
+            )
+            .maybe_child(store_enabled.then(|| {
+                Button::new()
+                    .primary()
+                    .on_press(move |_| {
+                        let open = !*show_cart.read();
+                        show_cart.set(open);
+                    })
+                    .text(tf("oneclient.wardrobe.cart.button", &[&cart_size]))
+            }));
+
+        let left = if history {
+            rect()
+                .width(Size::flex(1.0))
+                .child(
+                    label()
+                        .text(t("oneclient.wardrobe.history.title"))
+                        .font_size(text_size(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .color(colors::fg_primary()),
+                )
+                .into_element()
+        } else {
+            rect()
+                .width(Size::flex(1.0))
+                .child(
+                    // Popular, New, Bundles and Emotes push the chips past narrow windows
+                    ScrollView::new()
+                        .direction(Direction::Horizontal)
+                        .show_scrollbar(false)
+                        // so a plain mouse wheel moves the chips sideways
+                        .invert_scroll_wheel(true)
+                        .width(Size::fill())
+                        .height(Size::px(33.))
+                        .child(
+                            rect()
+                                .height(Size::fill())
+                                .main_align(Alignment::Center)
+                                .child(AnchorRow {
+                                    labels,
+                                    anchors,
+                                    scroll,
+                                }),
+                        ),
+                )
+                .into_element()
+        };
+
+        let bottom = rect().width(Size::fill()).height(Size::px(33.)).child(left);
 
         rect()
             .vertical()
@@ -1440,6 +1777,7 @@ impl Header {
 }
 
 const ANCHOR_HEIGHT: f32 = 24.;
+const STORE_LABEL_HEIGHT: f32 = 18.;
 const HEADING_HEIGHT: f32 = 28.;
 const NOTICE_HEIGHT: f32 = 57.;
 const INTRO_HEIGHT: f32 = 33.;
@@ -1713,137 +2051,51 @@ fn equip_strip(equipped: bool) -> (&'static str, IconType) {
     }
 }
 
-fn store_notice(
-    ctx: &GridCtx,
-    loading: &str,
-    empty: &str,
-    failed: impl Fn(&StoreData) -> bool,
-) -> Block {
+fn featured_rows(ctx: &GridCtx) -> Vec<Block> {
     let data = ctx.data;
-    Block::notice(match (&data.store, &data.store_error) {
-        (None, Some(error)) => error.clone(),
-        (None, None) => loading.to_string(),
-        (Some(store), _) if store.failed || failed(store) => {
-            t("oneclient.wardrobe.store.unreachable").to_string()
-        }
-        _ => empty.to_string(),
-    })
-}
-
-fn featured_content(ctx: &GridCtx) -> Vec<Block> {
-    let data = ctx.data;
+    let Some(store) = &data.store else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
-    if let Some(store) = &data.store {
-        let popular: Vec<&StoreItem> = store
-            .popular
+    for (text, items) in [
+        (t("oneclient.wardrobe.featured.popular"), &store.popular),
+        (t("oneclient.wardrobe.featured.new"), &store.newest),
+    ] {
+        let cards: Vec<Card> = items
             .iter()
             .filter(|item| data.matches(&item.name))
+            .map(|item| Card::Shop(item.id))
             .collect();
-        let newest: Vec<&StoreItem> = store
-            .newest
-            .iter()
-            .filter(|item| data.matches(&item.name))
-            .collect();
-        let bundles: Vec<&BundleInfo> = store
-            .bundles
-            .iter()
-            .filter(|bundle| data.matches(&bundle.name))
-            .collect();
-        if !popular.is_empty() {
-            out.push(ctx.anchor(t("oneclient.wardrobe.featured.popular")));
-            out.push(
-                ctx.grid(
-                    popular
-                        .into_iter()
-                        .map(|item| Card::Shop(item.id))
-                        .collect(),
-                ),
-            );
-        }
-        if !newest.is_empty() {
-            out.push(ctx.anchor(t("oneclient.wardrobe.featured.new")));
-            out.push(ctx.grid(newest.into_iter().map(|item| Card::Shop(item.id)).collect()));
-        }
-        if !bundles.is_empty() {
-            out.push(ctx.anchor(t("oneclient.wardrobe.featured.bundles")));
-            out.push(
-                ctx.grid(
-                    bundles
-                        .into_iter()
-                        .map(|bundle| Card::Bundle(bundle.id))
-                        .collect(),
-                ),
-            );
+        if !cards.is_empty() {
+            out.push(ctx.anchor(text));
+            out.push(ctx.grid(cards));
         }
     }
-    if out.is_empty() {
-        out.push(store_notice(
-            ctx,
-            t("oneclient.wardrobe.featured.loading"),
-            if data.query.trim().is_empty() {
-                t("oneclient.wardrobe.featured.empty")
-            } else {
-                t("oneclient.wardrobe.featured.no_match")
-            },
-            |store| store.featured_failed,
-        ));
+    let bundles: Vec<Card> = store
+        .bundles
+        .iter()
+        .filter(|bundle| data.matches(&bundle.name))
+        .map(|bundle| Card::Bundle(bundle.id))
+        .collect();
+    if !bundles.is_empty() {
+        out.push(ctx.anchor(t("oneclient.wardrobe.featured.bundles")));
+        out.push(ctx.grid(bundles));
     }
     out
 }
 
-fn emotes_content(ctx: &GridCtx) -> Vec<Block> {
-    let data = ctx.data;
+/// Owned cards, then the store's under a small label so the two never blur together
+fn owned_then_shop(owned: Vec<Card>, shop: Vec<Card>) -> Vec<Block> {
     let mut out = Vec::new();
-    let owned: Vec<&EmoteInfo> = data
-        .emotes()
-        .iter()
-        .filter(|emote| data.matches(&emote.name))
-        .collect();
     if !owned.is_empty() {
-        out.push(ctx.anchor(t("oneclient.wardrobe.emotes.owned")));
-        out.push(
-            ctx.grid(
-                owned
-                    .into_iter()
-                    .map(|emote| Card::Emote(emote.id))
-                    .collect(),
-            ),
-        );
+        out.push(Block::Cards(owned));
     }
-
-    let mut groups: Vec<(String, Vec<StoreItem>)> = Vec::new();
-    for item in data.shop(CosmeticType::Emote) {
-        let category = item
-            .tags
-            .category
-            .first()
-            .filter(|name| !name.trim().is_empty())
-            .map(|name| {
-                let name = name.trim();
-                let mut chars = name.chars();
-                chars
-                    .next()
-                    .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
-                    .unwrap_or_default()
-            })
-            .unwrap_or_else(|| t("oneclient.wardrobe.emotes.more").into());
-        match groups.iter_mut().find(|(name, _)| *name == category) {
-            Some((_, items)) => items.push(item),
-            None => groups.push((category, vec![item])),
-        }
-    }
-    for (category, items) in groups {
-        out.push(ctx.anchor(&category));
-        out.push(ctx.grid(items.iter().map(|item| Card::Shop(item.id)).collect()));
-    }
-
-    if out.is_empty() {
-        out.push(store_notice(
-            ctx,
-            t("oneclient.wardrobe.emotes.loading"),
-            t("oneclient.wardrobe.emotes.empty"),
-            |store| store.missing.contains(&CosmeticType::Emote),
+    if !shop.is_empty() {
+        out.push(Block::fixed(
+            store_label(t("oneclient.wardrobe.store.section")),
+            STORE_LABEL_HEIGHT,
         ));
+        out.push(Block::Cards(shop));
     }
     out
 }
@@ -1859,6 +2111,7 @@ fn cosmetics_content(ctx: &GridCtx) -> Vec<Block> {
     let mut out = Vec::new();
     let searching = !data.query.trim().is_empty();
     let store_down = data.store.as_ref().is_some_and(|store| store.failed);
+    out.extend(featured_rows(ctx));
 
     for (kind, text) in &categories() {
         if *kind == CosmeticType::Cape {
@@ -1878,15 +2131,34 @@ fn cosmetics_content(ctx: &GridCtx) -> Vec<Block> {
         }
 
         out.push(ctx.anchor(text));
-        let mut cards: Vec<Card> = owned
-            .into_iter()
-            .map(|group| Card::Owned(group.id))
-            .collect();
-        cards.extend(shop.iter().map(|item| Card::Shop(item.id)));
-        if !cards.is_empty() {
-            out.push(ctx.grid(cards));
-        }
+        out.extend(owned_then_shop(
+            owned
+                .into_iter()
+                .map(|group| Card::Owned(group.id))
+                .collect(),
+            shop.iter().map(|item| Card::Shop(item.id)).collect(),
+        ));
         if missing {
+            out.push(Block::notice(t("oneclient.wardrobe.store.unreachable")));
+        }
+    }
+
+    let emotes = owned_then_shop(
+        data.emotes()
+            .iter()
+            .filter(|emote| data.matches(&emote.name))
+            .map(|emote| Card::Emote(emote.id))
+            .collect(),
+        data.shop(CosmeticType::Emote)
+            .iter()
+            .map(|item| Card::Shop(item.id))
+            .collect(),
+    );
+    let emotes_missing = !searching && !store_down && store_missing(data, CosmeticType::Emote);
+    if !emotes.is_empty() || emotes_missing {
+        out.push(ctx.anchor(t("oneclient.wardrobe.category.emotes")));
+        out.extend(emotes);
+        if emotes_missing {
             out.push(Block::notice(t("oneclient.wardrobe.store.unreachable")));
         }
     }
@@ -1982,12 +2254,13 @@ fn cape_groups(ctx: &GridCtx) -> Vec<Block> {
             },
         ));
     } else {
-        let mut cards: Vec<Card> = owned
-            .into_iter()
-            .map(|group| Card::Owned(group.id))
-            .collect();
-        cards.extend(shop.iter().map(|item| Card::Shop(item.id)));
-        out.push(ctx.grid(cards));
+        out.extend(owned_then_shop(
+            owned
+                .into_iter()
+                .map(|group| Card::Owned(group.id))
+                .collect(),
+            shop.iter().map(|item| Card::Shop(item.id)).collect(),
+        ));
     }
 
     out
@@ -2021,6 +2294,7 @@ fn mojang_card(ctx: &GridCtx, cape: &MojangCape) -> Element {
             interactive: false,
         }
         .into_element(),
+        preview: None,
         menu: vec![{
             let toggle = ctx.equip(toggle.clone());
             MenuAction::new(
@@ -2051,8 +2325,9 @@ fn mojang_card(ctx: &GridCtx, cape: &MojangCape) -> Element {
 fn owned_card(ctx: &GridCtx, group: &CosmeticGroup) -> Element {
     let data = ctx.data;
     let variant = data.selected_variant(group);
-    let equipped = data.equipped_slot(group).is_some();
-    let (action_label, action_icon) = equip_strip(equipped);
+    let worn = data.pick_worn(group);
+    let equipped = !data.worn(group).is_empty();
+    let (action_label, action_icon) = equip_strip(worn);
     let picked = Selection::Owned(group.id);
     let mut status = ctx.shared.status;
 
@@ -2062,48 +2337,37 @@ fn owned_card(ctx: &GridCtx, group: &CosmeticGroup) -> Element {
     };
     let on_equip = ctx.equip(toggle);
 
-    let thumbnail = match variant {
-        Some(variant) if group.kind == CosmeticType::Cape => LookThumb {
-            uuid: data.uuid.clone(),
-            skin: None,
-            cape: variant.url.clone().map(CapeSource::Plus),
-            cosmetics: Vec::new(),
-            emote: None,
-            particle_color: None,
-            yaw: BACK_YAW,
-            zoom: CAPE_ZOOM,
-            interactive: false,
-        }
-        .into_element(),
-        Some(variant) => CoverThumb {
-            url: data.variant_cover(variant),
-        }
-        .into_element(),
-        None => CoverThumb { url: None }.into_element(),
-    };
+    let thumbnail = CoverThumb {
+        url: variant.and_then(|variant| data.variant_cover(variant)),
+    }
+    .into_element();
 
-    let swatches: Vec<Swatch> = group
-        .ui_variants()
-        .into_iter()
-        .map(|option| Swatch {
-            id: option.id,
-            name: option.name.clone(),
-            texture: option.url.clone(),
+    // Swatch ids are indexes into the chip list, since a Both chip has no single variant id
+    let options = variant_options(group);
+    let current = pick_key(group, &data.pick(group));
+    let swatches: Vec<Swatch> = options
+        .iter()
+        .enumerate()
+        .map(|(index, (name, pick))| Swatch {
+            id: index as i32,
+            name: name.clone(),
+            texture: pick
+                .last()
+                .and_then(|(_, id)| data.variant(*id))
+                .and_then(|(_, variant)| variant.url.clone()),
             cape: group.kind == CosmeticType::Cape,
-            selected: variant.is_some_and(|variant| variant.name == option.name),
+            selected: pick_key(group, pick) == current,
         })
         .collect();
     let on_pick = {
         let mut picks = ctx.shared.variant_picks;
-        let action = ctx.shared.action;
-        let status = ctx.shared.status;
+        let preview = ctx.select(picked.clone());
         let group_id = group.id;
-        let pick = VariantPick::new(data, group);
-        EventHandler::new(move |variant_id: i32| {
-            picks.write().insert(group_id, variant_id);
-            if let Some(keys) = pick.action(variant_id) {
-                perform(action, status, keys);
+        EventHandler::new(move |index: i32| {
+            if let Some((_, pick)) = usize::try_from(index).ok().and_then(|i| options.get(i)) {
+                picks.write().insert(group_id, pick.clone());
             }
+            preview.call(());
         })
     };
 
@@ -2117,6 +2381,7 @@ fn owned_card(ctx: &GridCtx, group: &CosmeticGroup) -> Element {
         selected: ctx.selected() == Some(picked.clone()),
         badge: None,
         thumbnail,
+        preview: variant.and_then(|variant| data.preview_for_variant(variant.id)),
         menu: vec![
             {
                 let preview = ctx.select(picked.clone());
@@ -2130,12 +2395,12 @@ fn owned_card(ctx: &GridCtx, group: &CosmeticGroup) -> Element {
             {
                 let on_equip = on_equip.clone();
                 MenuAction::new(
-                    if equipped {
+                    if worn {
                         IconType::XClose
                     } else {
                         IconType::Plus
                     },
-                    if equipped {
+                    if worn {
                         t("oneclient.wardrobe.action.unequip")
                     } else {
                         t("oneclient.wardrobe.action.equip")
@@ -2210,7 +2475,7 @@ fn shop_card(ctx: &GridCtx, item: &StoreItem) -> Element {
         ))
         .maybe_child((variants.len() > 1).then(|| {
             label()
-                .text(tf("oneclient.wardrobe.variants", &[&variants.len()]))
+                .text(tf("oneclient.wardrobe.bundled", &[&variants.len()]))
                 .font_size(text_size(11.))
                 .color(colors::fg_secondary())
         }))
@@ -2259,6 +2524,10 @@ fn shop_card(ctx: &GridCtx, item: &StoreItem) -> Element {
         selected: ctx.selected() == Some(Selection::Shop(item.id)),
         badge,
         thumbnail: shop_thumbnail(data, item, &variant, false),
+        preview: variant
+            .preview_url
+            .clone()
+            .or_else(|| item.preview_url.clone()),
         menu: vec![
             {
                 let preview = preview.clone();
@@ -2333,6 +2602,7 @@ fn bundle_card(ctx: &GridCtx, bundle: &BundleInfo) -> Element {
             url: bundle.asset_id.map(api::asset_url),
         }
         .into_element(),
+        preview: None,
         menu: vec![
             {
                 let view = view.clone();
@@ -2377,6 +2647,7 @@ fn emote_card(ctx: &GridCtx, emote: &EmoteInfo) -> Element {
             url: data.cover_for_variant(emote.id),
         }
         .into_element(),
+        preview: data.preview_for_variant(emote.id),
         menu: vec![{
             let preview = ctx.select(picked.clone());
             MenuAction::new(
@@ -2503,7 +2774,7 @@ fn outfit_card(ctx: &GridCtx, outfit: &OutfitInfo) -> Element {
         badge: outfit.favorite.then(Badge::favorite),
         thumbnail: LookThumb {
             uuid: data.uuid.clone(),
-            cosmetics: data.look_cosmetics(&outfit.equipped, None),
+            cosmetics: data.look_cosmetics(&outfit.equipped, Vec::new()),
             emote: None,
             particle_color: outfit.particle_color,
             skin,
@@ -2513,6 +2784,7 @@ fn outfit_card(ctx: &GridCtx, outfit: &OutfitInfo) -> Element {
             interactive: false,
         }
         .into_element(),
+        preview: None,
         menu: vec![
             {
                 let wear = wear.clone();
@@ -2696,6 +2968,7 @@ fn skin_card(ctx: &GridCtx, skin: &SkinInfo) -> Element {
             interactive: false,
         }
         .into_element(),
+        preview: None,
         menu: vec![
             {
                 let wear = wear.clone();
@@ -2767,5 +3040,87 @@ mod tests {
         assert_eq!(columns, MAX_COLUMNS);
         let used = width * columns as f32 + GRID_GAP * (columns as f32 - 1.);
         assert!((used - 5000.).abs() < 0.01);
+    }
+
+    #[test]
+    fn glove_variants_equip_to_their_own_hand() {
+        let variant = |id, slots: Vec<BodySlot>| CosmeticVariant {
+            id,
+            name: id.to_string(),
+            model: None,
+            allowed_slots: slots,
+            url: None,
+            cover_url: None,
+            hash: String::new(),
+        };
+        let both = vec![BodySlot::LeftHand, BodySlot::RightHand];
+        let group = CosmeticGroup {
+            id: 1,
+            kind: CosmeticType::Glove,
+            name: "Glove".into(),
+            allowed_slots: both.clone(),
+            variants: Vec::new(),
+        };
+        let slot = |v: &CosmeticVariant| equip_slot(&group, v);
+        assert_eq!(
+            slot(&variant(1, vec![BodySlot::LeftHand])),
+            Some(BodySlot::LeftHand)
+        );
+        assert_eq!(
+            slot(&variant(2, vec![BodySlot::RightHand])),
+            Some(BodySlot::RightHand)
+        );
+        assert_eq!(slot(&variant(3, both)), Some(BodySlot::RightHand));
+        assert_eq!(slot(&variant(4, Vec::new())), Some(BodySlot::RightHand));
+    }
+
+    #[test]
+    fn variant_options_match_poly_plus_chips() {
+        let variant = |id, name: &str, slot| CosmeticVariant {
+            id,
+            name: name.into(),
+            model: None,
+            allowed_slots: vec![slot],
+            url: None,
+            cover_url: None,
+            hash: String::new(),
+        };
+        let group = |variants| CosmeticGroup {
+            id: 1,
+            kind: CosmeticType::Glove,
+            name: "Glove".into(),
+            allowed_slots: Vec::new(),
+            variants,
+        };
+        let labels = |group: &CosmeticGroup| -> Vec<(String, Pick)> { variant_options(group) };
+
+        let nature = group(vec![
+            variant(1, "Right", BodySlot::RightHand),
+            variant(2, "Left", BodySlot::LeftHand),
+        ]);
+        let chips = labels(&nature);
+        assert_eq!(chips.len(), 3);
+        assert_eq!(chips[0], ("Left".into(), vec![(BodySlot::LeftHand, 2)]));
+        assert_eq!(chips[1], ("Right".into(), vec![(BodySlot::RightHand, 1)]));
+        assert_eq!(
+            chips[2].1,
+            vec![(BodySlot::LeftHand, 2), (BodySlot::RightHand, 1)]
+        );
+
+        // Same name on both hands stays two chips plus a Both
+        let gauntlet = group(vec![
+            variant(1, "Silver", BodySlot::RightHand),
+            variant(2, "Silver", BodySlot::LeftHand),
+            variant(3, "Gold", BodySlot::RightHand),
+        ]);
+        let chips = labels(&gauntlet);
+        let names: Vec<&str> = chips.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names[..2], ["Left Silver", "Right Silver"]);
+        assert_eq!(
+            chips[2].1,
+            vec![(BodySlot::LeftHand, 2), (BodySlot::RightHand, 1)]
+        );
+        assert_eq!(names[3], "Gold");
+        assert_eq!(chips.len(), 4);
     }
 }

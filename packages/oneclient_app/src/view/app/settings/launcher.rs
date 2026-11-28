@@ -9,7 +9,7 @@ use oneclient_core::storage::format_bytes;
 use super::{resettable, section_header, settings_page, settings_row};
 use crate::Route;
 use crate::components::{
-    Button, Dropdown, Icon, IconType, OverlayPopup, open_folder_button, toggle,
+    Button, Dropdown, Icon, IconType, OverlayPopup, onedrive_warning, open_folder_button, toggle,
 };
 use crate::hooks::{
     Actions, DiscardLeftoversKeys, mutation_error, mutation_is_running, try_leftovers,
@@ -163,10 +163,10 @@ impl Component for SettingsLauncher {
             ))
             .child(settings_row(
                 IconType::Moon01,
-                t("oneclient.settings.launcher.run_in_background.title"),
-                t("oneclient.settings.launcher.run_in_background.description"),
+                t("oneclient.settings.launcher.close_behaviour.title"),
+                t("oneclient.settings.launcher.close_behaviour.description"),
                 resettable(
-                    toggle(run_in_background),
+                    close_behaviour_field(run_in_background),
                     run_in_background,
                     defaults.run_in_background,
                 ),
@@ -205,6 +205,18 @@ fn launch_behaviour_field(mut selected: State<LaunchBehaviour>) -> impl IntoElem
         })
 }
 
+/// Backed by `run_in_background` so existing settings files carry over unchanged
+fn close_behaviour_field(mut background: State<bool>) -> impl IntoElement {
+    let exit = t("oneclient.settings.launcher.close_behaviour.exit");
+    let to_background = t("oneclient.settings.launcher.close_behaviour.background");
+    let current = if *background.read() { to_background } else { exit };
+
+    Dropdown::new(current, vec![exit.to_string(), to_background.to_string()])
+        .width(Size::px(220.))
+        .height(Size::px(34.))
+        .on_select(move |idx: usize| background.set(idx == 1))
+}
+
 #[derive(PartialEq)]
 struct DataFolder;
 
@@ -216,6 +228,7 @@ impl Component for DataFolder {
         let actions = use_dispatch();
 
         let pending = use_state(|| None::<RelocationPlan>);
+        let onedrive = use_state(|| None::<RelocationPlan>);
         let error = use_state(|| None::<String>);
         let checking = use_state(|| false);
 
@@ -225,7 +238,7 @@ impl Component for DataFolder {
             .secondary()
             .small()
             .disabled(checking_now)
-            .on_press(move |_| browse(pending, error, checking))
+            .on_press(move |_| browse(pending, onedrive, error, checking))
             .text(if checking_now {
                 t("oneclient.settings.launcher.data_folder.checking")
             } else {
@@ -240,7 +253,7 @@ impl Component for DataFolder {
                     .secondary()
                     .small()
                     .disabled(checking_now)
-                    .on_press(move |_| plan(pending, error, checking, Source::Default))
+                    .on_press(move |_| plan(pending, onedrive, error, checking, Source::Default))
                     .text(t("oneclient.common.reset")),
             );
         }
@@ -297,6 +310,22 @@ impl Component for DataFolder {
             section = section.child(confirm_move(planned, pending, actions));
         }
 
+        if let Some(flagged) = onedrive.read().clone() {
+            let mut dismiss = onedrive;
+            let mut back = onedrive;
+            let mut proceed = onedrive;
+            let mut confirm = pending;
+            section = section.child(onedrive_warning(
+                &flagged.to,
+                move |()| dismiss.set(None),
+                move |()| {
+                    back.set(None);
+                    browse(pending, onedrive, error, checking);
+                },
+                move |()| confirm.set(proceed.write().take()),
+            ));
+        }
+
         section.into_element()
     }
 }
@@ -309,14 +338,16 @@ enum Source {
 
 fn browse(
     pending: State<Option<RelocationPlan>>,
+    onedrive: State<Option<RelocationPlan>>,
     error: State<Option<String>>,
     checking: State<bool>,
 ) {
-    plan(pending, error, checking, Source::Picked);
+    plan(pending, onedrive, error, checking, Source::Picked);
 }
 
 fn plan(
     mut pending: State<Option<RelocationPlan>>,
+    mut onedrive: State<Option<RelocationPlan>>,
     mut error: State<Option<String>>,
     mut checking: State<bool>,
     source: Source,
@@ -348,6 +379,7 @@ fn plan(
         error.set(None);
 
         match crate::launcher::off_ui(async move { plan_move(picked.as_deref()).await }).await {
+            Ok(planned) if data_dir::in_onedrive(&planned.to) => onedrive.set(Some(planned)),
             Ok(planned) => pending.set(Some(planned)),
             Err(message) => error.set(Some(message)),
         }
@@ -575,11 +607,11 @@ inventory::submit! {
 
 inventory::submit! {
     SearchItem {
-        id: "launcher.run_in_background",
+        id: "launcher.close_behaviour",
         icon: IconType::Moon01,
-        title: "oneclient.settings.launcher.run_in_background.title",
-        description: "oneclient.settings.launcher.run_in_background.description",
-        keywords: &["background", "tray", "close", "minimize"],
+        title: "oneclient.settings.launcher.close_behaviour.title",
+        description: "oneclient.settings.launcher.close_behaviour.description",
+        keywords: &["background", "tray", "close", "exit", "quit", "minimize"],
         route: Route::SettingsLauncher {},
     }
 }
