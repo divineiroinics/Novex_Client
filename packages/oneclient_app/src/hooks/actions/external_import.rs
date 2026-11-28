@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use freya::prelude::spawn_in_window;
+use freya::prelude::spawn_global;
 use oneclient_common::domain::ProviderId;
 use oneclient_content::ContentError;
 use oneclient_content::modpacks::{SHARE_EXTENSION, detect_format};
@@ -21,6 +21,8 @@ use crate::launcher::{self, off_ui};
 use crate::notifications::{BlockedDownloads, UnpublishedInstance};
 
 const MAX_LISTED: usize = 3;
+
+type ReviewedInstance = (ExternalInstance, Option<(u64, Vec<UnpublishedFile>)>);
 
 static QUEUE: Mutex<Option<Vec<ExternalImportJob>>> = Mutex::new(None);
 
@@ -161,7 +163,7 @@ fn discard_workdir_set(workdirs: HashSet<PathBuf>) {
     if workdirs.is_empty() {
         return;
     }
-    spawn_in_window(async move {
+    spawn_global(async move {
         off_ui(async move {
             for workdir in workdirs {
                 discard_instance_archive(&workdir).await;
@@ -178,7 +180,7 @@ impl Actions {
         }
 
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let mut held = HeldForCheck {
                 actions: actions.clone(),
                 jobs: Some(jobs),
@@ -187,7 +189,7 @@ impl Actions {
                 actions.start_external_imports(held.jobs.take().unwrap_or_default());
                 return;
             };
-            let to_check: Vec<(ExternalInstance, Option<(u64, Vec<UnpublishedFile>)>)> = held
+            let to_check: Vec<ReviewedInstance> = held
                 .jobs
                 .iter()
                 .flatten()
@@ -321,7 +323,7 @@ impl Actions {
         };
 
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let mut running = RunningImport {
                 actions: actions.clone(),
                 workdirs: HashSet::new(),
@@ -465,7 +467,7 @@ impl Actions {
         }
 
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let probe = path.clone();
             let verdict = off_ui(async move {
                 if is_instance_archive(&probe).await {
@@ -508,7 +510,7 @@ impl Actions {
 
     pub fn import_instance_archive(&self, path: PathBuf) {
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else {
                 return;
             };

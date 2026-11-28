@@ -2,6 +2,7 @@ mod actions;
 mod active_cluster;
 mod chat;
 mod debounce;
+mod hold_countdown;
 mod overlay_claims;
 mod queries;
 mod selection;
@@ -16,6 +17,7 @@ pub use chat::{
 };
 
 pub use debounce::use_debounced;
+pub use hold_countdown::use_hold_countdown;
 pub use overlay_claims::{
     OverlayClaims, use_overlay_claim, use_overlay_claim_when, use_overlay_claims,
     use_provide_overlay_claims,
@@ -38,8 +40,8 @@ pub use active_cluster::{
 
 pub(crate) use actions::listed;
 pub use actions::{
-    Actions, AlternativePick, ExternalImportJob, NotificationBuilder, PumpSignal, exporting,
-    modpack_job_running, update_check_running,
+    Actions, AlternativePick, COPIES_REQUEST, ExternalImportJob, NotificationBuilder, PackageCheck,
+    PumpSignal, exporting, modpack_job_running, update_check_running,
 };
 pub use actions::{
     CloudSignal, add_collaborator, cloud_engine, cloud_sync_signal, forget_deleted_cluster,
@@ -48,7 +50,6 @@ pub use actions::{
 };
 pub use queries::ALL_VERSIONS;
 pub use queries::PackageUpdatesQuery;
-pub(crate) use queries::take_bundles;
 pub(crate) use queries::use_folder_watch;
 pub use queries::wardrobe;
 pub use queries::{
@@ -97,9 +98,11 @@ pub use queries::{
     use_version_art_gallery, use_version_loaders, use_version_metadata, use_versions, version_list,
     versions_metadata, versions_total,
 };
-pub use queries::{BisectAction, BisectMutation, use_bisect, use_bisect_mutation};
+pub use queries::{BisectAction, BisectMutation, bisect_report, use_bisect, use_bisect_mutation};
 pub use queries::{GraphicsBackendQuery, use_graphics_backend, use_has_game_options};
-pub(crate) use queries::{UNCREATED_CLUSTER, bundle_plan, bundle_taken, pkg_key};
+pub(crate) use queries::{
+    UNCREATED_CLUSTER, bundle_plan, bundle_taken, pkg_key, shared_mod_keys, toggle_keys,
+};
 pub use queries::{
     add_world_datapacks, delete_world, delete_world_datapack, invalidate_world_contents,
     spawn_world_task, try_cluster_worlds, try_world_datapacks, try_world_size, use_cluster_worlds,
@@ -107,6 +110,7 @@ pub use queries::{
 };
 pub use queries::{external_launchers, use_external_launchers};
 pub use queries::{import_screening, use_import_screening, use_modpack_header};
+pub(crate) use queries::{take_bundles, turn_on_bundles};
 
 use crate::chat::{ChatInbox, ChatRoster, ChatThread};
 use crate::notifications::NotificationSnapshot;
@@ -280,6 +284,14 @@ pub fn use_chat_online_count(members: &[uuid::Uuid]) -> usize {
 
 pub fn use_invite_join() -> Option<crate::state::InviteJoinPrompt> {
     use_radio(AppChannel::Social).read().invite_join.clone()
+}
+
+pub fn use_special_cooldown(group_id: i32) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let radio = use_radio(AppChannel::Chat);
+    let state = radio.read();
+    let chat = &state.chat;
+    chat.special_cooldown
+        .filter(|_| chat.special_group == Some(group_id))
 }
 
 pub fn use_chat_invite_game(invite_id: i32) -> Option<crate::chat::InviteGame> {

@@ -3,6 +3,7 @@ mod gc;
 mod link;
 pub mod manifest;
 mod paths;
+pub mod undo;
 
 pub(crate) use download::store_release_dependencies;
 pub use download::{download_external, download_version_file, ensure_artifact_file};
@@ -11,7 +12,7 @@ pub use gc::{
     remove_unreferenced_files,
 };
 pub use link::{
-    LiveSync, drop_unmanaged_mod, link_or_copy, materialize_file, remove_entry,
+    LiveSync, drop_unmanaged_mod, link_or_copy, materialize_file, materialized_root, remove_entry,
     sharing_cluster_ids, sharing_with, sweep_staging_files, try_link_materialized,
     try_unlink_materialized,
 };
@@ -115,6 +116,34 @@ impl PackageStore {
         child: Option<&GroupedProgressChild>,
         ctx: &ContentCtx,
     ) -> ContentResult<(ArtifactRow, LiveSync)> {
+        Self::install_to_cluster_recording_link(
+            provider_id,
+            project,
+            version,
+            cluster_id,
+            skip_compatibility,
+            force_download,
+            child,
+            ctx,
+        )
+        .await
+        .map(|(artifact, live, _)| (artifact, live))
+    }
+
+    /// Returns the new link's timestamp when this install created it. Upserts of
+    /// existing links return no timestamp, so an Undo cannot claim them.
+    #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(project, version, child, ctx), fields(project_id = %project.id, version_id = %version.version_id))]
+    pub async fn install_to_cluster_recording_link(
+        provider_id: ProviderId,
+        project: &ProjectDetail,
+        version: &VersionDetail,
+        cluster_id: i64,
+        skip_compatibility: bool,
+        force_download: bool,
+        child: Option<&GroupedProgressChild>,
+        ctx: &ContentCtx,
+    ) -> ContentResult<(ArtifactRow, LiveSync, Option<String>)> {
         tracing::info!("installing package to cluster");
         let cluster = Self::get_cluster(cluster_id, ctx).await?;
 
@@ -126,7 +155,8 @@ impl PackageStore {
             Self::download_and_cache(provider_id, project, version, force_download, child, ctx)
                 .await?;
 
-        let enabled = Self::link_artifact(&artifact, &cluster, None, ctx).await?;
+        let (enabled, added_at) =
+            Self::link_artifact_recording_addition(&artifact, &cluster, None, ctx).await?;
 
         Self::replace_other_versions(cluster_id, provider_id, &project.id, &artifact.hash, ctx)
             .await?;
@@ -137,7 +167,7 @@ impl PackageStore {
             LiveSync::Skipped
         };
 
-        Ok((artifact, live))
+        Ok((artifact, live, added_at))
     }
 
     /// Bundle-owned copies are stepped over
@@ -228,15 +258,31 @@ impl PackageStore {
         cluster_file_name: Option<&str>,
         ctx: &ContentCtx,
     ) -> ContentResult<bool> {
+        Self::link_artifact_recording_addition(artifact, cluster, cluster_file_name, ctx)
+            .await
+            .map(|(enabled, _)| enabled)
+    }
+
+    async fn link_artifact_recording_addition(
+        artifact: &ArtifactRow,
+        cluster: &ClusterRow,
+        cluster_file_name: Option<&str>,
+        ctx: &ContentCtx,
+    ) -> ContentResult<(bool, Option<String>)> {
         let content_type = ContentType::from_repr(artifact.content_type as u8);
         ensure_mods_unlocked(cluster.id, content_type, ctx).await?;
 
         let name = cluster_file_name.unwrap_or(&artifact.file_name);
 
-        let link =
-            artifact_dao::link_cluster_artifact(&ctx.db, cluster.id, &artifact.hash, name).await?;
+        let (link, added_at) = artifact_dao::link_cluster_artifact_recording_addition(
+            &ctx.db,
+            cluster.id,
+            &artifact.hash,
+            name,
+        )
+        .await?;
 
-        Ok(link.enabled != 0)
+        Ok((link.enabled != 0, added_at))
     }
 
     #[tracing::instrument(level = "debug", skip(artifact, ctx), fields(hash = %artifact.hash))]
@@ -496,12 +542,13 @@ impl PackageStore {
     #[tracing::instrument(level = "debug", skip(ctx))]
     pub async fn import_local_file(
         path: &Path,
+        hash: Option<&str>,
         content_type: ContentType,
         cluster_id: i64,
         ctx: &ContentCtx,
     ) -> ContentResult<ArtifactRow> {
         let cluster = Self::get_cluster(cluster_id, ctx).await?;
-        let row = store_local_file(path, content_type, &cluster, ctx).await?;
+        let row = store_local_file(path, hash, content_type, &cluster, ctx).await?;
 
         describe_imports(&[(row.clone(), content_type)], ctx).await;
         Ok(row)
@@ -524,7 +571,7 @@ impl PackageStore {
         let mut stored = Vec::with_capacity(files.len());
 
         for (path, content_type) in files {
-            match store_local_file(path, *content_type, &cluster, ctx).await {
+            match store_local_file(path, None, *content_type, &cluster, ctx).await {
                 Ok(row) => {
                     stored.push((row.clone(), *content_type));
                     report.imported.push(row);
@@ -606,13 +653,17 @@ pub(crate) async fn ensure_mods_unlocked(
 /// links it to the cluster working out what it is comes after
 async fn store_local_file(
     path: &Path,
+    hash: Option<&str>,
     content_type: ContentType,
     cluster: &ClusterRow,
     ctx: &ContentCtx,
 ) -> ContentResult<ArtifactRow> {
     ensure_takes_mods(content_type, cluster)?;
 
-    let row = cache_local_file(path, content_type, ctx).await?;
+    let row = match hash {
+        Some(hash) => cache_hashed_file(path, hash, content_type, ctx).await?,
+        None => cache_local_file(path, content_type, ctx).await?,
+    };
     PackageStore::link_artifact(&row, cluster, None, ctx).await?;
     Ok(row)
 }
@@ -622,15 +673,23 @@ pub async fn cache_local_file(
     content_type: ContentType,
     ctx: &ContentCtx,
 ) -> ContentResult<ArtifactRow> {
+    let hash = normalize_hash(&sha1_file(path).await?);
+    cache_hashed_file(path, &hash, content_type, ctx).await
+}
+
+async fn cache_hashed_file(
+    path: &Path,
+    hash: &str,
+    content_type: ContentType,
+    ctx: &ContentCtx,
+) -> ContentResult<ArtifactRow> {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| PackageError::InvalidLocalFile(path.display().to_string()))?
         .to_string();
 
-    let hash = normalize_hash(&sha1_file(path).await?);
-
-    if let Some(row) = artifact_dao::get_artifact_by_hash(&ctx.db, &hash).await?
+    if let Some(row) = artifact_dao::get_artifact_by_hash(&ctx.db, hash).await?
         && artifact_absolute_path(&row.path)?.exists()
     {
         return Ok(row);
@@ -653,7 +712,7 @@ pub async fn cache_local_file(
 
     artifact_dao::insert_artifact(
         &ctx.db,
-        &hash,
+        hash,
         content_type as i64,
         &stored_path,
         &file_name,

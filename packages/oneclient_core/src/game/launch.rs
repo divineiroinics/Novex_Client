@@ -1343,8 +1343,7 @@ async fn install_novex_badge_mod(
 
     if !matches!(
         cluster.mc_loader,
-        oneclient_common::domain::GameLoader::Fabric
-            | oneclient_common::domain::GameLoader::Quilt
+        oneclient_common::domain::GameLoader::Fabric | oneclient_common::domain::GameLoader::Quilt
     ) {
         tracing::debug!(
             loader = ?cluster.mc_loader,

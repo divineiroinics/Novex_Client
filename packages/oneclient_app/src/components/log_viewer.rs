@@ -1,10 +1,13 @@
 use std::sync::{Arc, LazyLock};
 
+use freya::animation::{AnimNum, Ease, UseAnimation, use_animation};
 use freya::prelude::*;
 use freya::text_edit::Clipboard;
 use regex::Regex;
 
-use crate::components::{Icon, IconType, ScrollArea, ScrollAreaCtx, corrected_scroll};
+use crate::components::{
+    Button, Icon, IconType, ScrollArea, ScrollAreaCtx, TooltipPlacement, corrected_scroll,
+};
 use crate::i18n::t;
 use crate::theme::{self, colors, rounded, text_size};
 
@@ -17,6 +20,8 @@ const CHAR_W: f32 = LINE_FONT_SIZE * 0.6;
 const ROW_PAD_X: f32 = 10.;
 const TAB_WIDTH: usize = 4;
 const OVERSCAN: i64 = 4;
+const FLASH_MS: u64 = 1000;
+const FLASH_ALPHA: f32 = 90.;
 
 static LOG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\[((?:\S+ )?\d+:\d+:\d+(?:\.\d+)?)\] \[([^/\n\r]*)/(\w+)\]:? (?:\[(CHAT)\])?")
@@ -153,8 +158,11 @@ fn parse_line(raw: &str) -> ParsedLine {
 pub struct LogViewer {
     title: String,
     lines: Arc<Vec<Arc<str>>>,
+    numbers: Option<Arc<Vec<usize>>>,
+    on_jump: Option<EventHandler<()>>,
     streaming: bool,
     header: Option<Element>,
+    actions: Option<Element>,
 }
 
 impl LogViewer {
@@ -162,8 +170,11 @@ impl LogViewer {
         Self {
             title: title.into(),
             lines: lines.into(),
+            numbers: None,
+            on_jump: None,
             streaming: false,
             header: None,
+            actions: None,
         }
     }
 
@@ -172,8 +183,24 @@ impl LogViewer {
         self
     }
 
+    pub fn numbers(mut self, numbers: impl Into<Option<Arc<Vec<usize>>>>) -> Self {
+        self.numbers = numbers.into();
+        self
+    }
+
+    pub fn on_jump(mut self, on_jump: Option<EventHandler<()>>) -> Self {
+        self.on_jump = on_jump;
+        self
+    }
+
     pub fn header(mut self, header: impl IntoElement) -> Self {
         self.header = Some(header.into_element());
+        self
+    }
+
+    /// Controls placed in the title row, right of the title
+    pub fn actions(mut self, actions: impl IntoElement) -> Self {
+        self.actions = Some(actions.into_element());
         self
     }
 }
@@ -182,6 +209,8 @@ impl Component for LogViewer {
     fn render(&self) -> impl IntoElement {
         let streaming = self.streaming;
         let lines: Arc<Vec<Arc<str>>> = self.lines.clone();
+        let numbers = self.numbers.clone();
+        let on_jump = self.on_jump.clone();
         let count = lines.len();
 
         let content_h = count as f32 * LINE_H + BODY_PAD_TOP + BODY_PAD_BOTTOM;
@@ -189,7 +218,11 @@ impl Component for LogViewer {
             use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(WidthCache::default())));
 
         let max_chars = width_cache.borrow_mut().max_cols(&lines);
-        let max_digits = (count.max(1) as f32).log10().floor() as usize + 1;
+        let max_number = numbers
+            .as_ref()
+            .and_then(|n| n.last().copied())
+            .unwrap_or(count);
+        let max_digits = (max_number.max(1) as f32).log10().floor() as usize + 1;
         let num_col_w = max_digits as f32 * (LINE_FONT_SIZE * 0.62) + 6.;
         let content_w = ROW_PAD_X + num_col_w + NUM_GAP + max_chars as f32 * CHAR_W + ROW_PAD_X;
 
@@ -199,6 +232,10 @@ impl Component for LogViewer {
         let sel_anchor = use_state::<Option<(usize, usize)>>(|| None);
         let sel_focus = use_state::<Option<(usize, usize)>>(|| None);
         let selecting = use_state(|| false);
+        let jump_to = use_state::<Option<usize>>(|| None);
+        let flash_line = use_state::<Option<usize>>(|| None);
+        let flash_anim = use_animation(|_| AnimNum::new(1., 0.).time(FLASH_MS).ease(Ease::In));
+        let flash = (*flash_line.read()).map(|line| (line, flash_anim.read().value()));
 
         let stick_bottom = streaming && *auto_scroll.read();
 
@@ -210,8 +247,8 @@ impl Component for LogViewer {
             .background(colors::page_elevated())
             .corner_radius(rounded(12.))
             .maybe_child(
-                (!self.title.is_empty() || streaming)
-                    .then(|| toolbar(self.title.clone(), streaming, auto_scroll)),
+                (!self.title.is_empty() || self.actions.is_some())
+                    .then(|| toolbar(self.title.clone(), self.actions.clone())),
             )
             .maybe_child(self.header.clone())
             .child(
@@ -222,6 +259,11 @@ impl Component for LogViewer {
                     .on_user_scroll(move |_| {
                         if streaming {
                             auto_scroll.set_if_modified(false);
+                        }
+                    })
+                    .on_overscroll_bottom(move |_| {
+                        if streaming {
+                            auto_scroll.set_if_modified(true);
                         }
                     })
                     .content(move |ctx: ScrollAreaCtx| {
@@ -236,69 +278,83 @@ impl Component for LogViewer {
                             sel_anchor,
                             sel_focus,
                             selecting,
+                            numbers: numbers.clone(),
+                            on_jump: on_jump.clone(),
+                            jump_to,
+                            auto_scroll,
+                            flash_line,
+                            flash_anim,
+                            flash,
                         })
                     }),
             )
+            .maybe_child(streaming.then(|| AutoScrollFab { auto_scroll }.into_element()))
     }
 }
 
-fn toolbar(title: String, streaming: bool, auto_scroll: State<bool>) -> impl IntoElement {
-    rect()
+fn toolbar(title: String, actions: Option<Element>) -> impl IntoElement {
+    let has_actions = actions.is_some();
+    let row = rect()
         .horizontal()
         .width(Size::fill())
         .cross_align(Alignment::Center)
         .content(Content::Flex)
-        .padding(Gaps::new(12., 20., 0., 20.))
-        .spacing(12.)
-        .child(
+        .padding(if has_actions {
+            Gaps::new(10., 14., 10., 20.)
+        } else {
+            Gaps::new(12., 20., 0., 20.)
+        })
+        .spacing(16.)
+        .maybe_child((!title.is_empty()).then(|| {
             label()
                 .text(title)
                 .font_size(text_size(18.))
                 .font_weight(FontWeight::SEMI_BOLD)
-                .color(colors::fg_primary()),
-        )
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::flex(1.0))
-                .main_align(Alignment::End)
-                .cross_align(Alignment::Center)
-                .maybe_child(streaming.then(|| auto_scroll_toggle(auto_scroll))),
-        )
+                .max_lines(1)
+                .color(colors::fg_primary())
+                .into_element()
+        }))
+        .maybe_child(
+            actions.map(|actions| rect().width(Size::flex(1.0)).child(actions).into_element()),
+        );
+
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .child(row)
+        .maybe_child(has_actions.then(crate::ui::divider))
         .into_element()
 }
 
-fn auto_scroll_toggle(mut auto_scroll: State<bool>) -> impl IntoElement {
-    let on = *auto_scroll.read();
-    rect()
-        .horizontal()
-        .cross_align(Alignment::Center)
-        .spacing(6.)
-        .padding(Gaps::new_symmetric(5., 10.))
-        .corner_radius(rounded(7.))
-        .background(if on {
-            colors::brand().with_a(40)
-        } else {
-            colors::component_bg()
-        })
-        .cursor(CursorIcon::Pointer)
-        .on_press(move |_| auto_scroll.toggle())
-        .child(Icon::new(IconType::ChevronDown).size(13.).color(if on {
-            colors::brand()
-        } else {
-            colors::fg_secondary()
-        }))
-        .child(
-            label()
-                .text(t("oneclient.components.log_viewer.auto_scroll"))
-                .font_size(text_size(11.))
-                .color(if on {
-                    colors::brand()
-                } else {
-                    colors::fg_secondary()
-                }),
-        )
-        .into_element()
+#[derive(PartialEq)]
+struct AutoScrollFab {
+    auto_scroll: State<bool>,
+}
+
+impl Component for AutoScrollFab {
+    fn render(&self) -> impl IntoElement {
+        let mut auto_scroll = self.auto_scroll;
+        let on = *auto_scroll.read();
+
+        let button = Button::new()
+            .icon()
+            .width(Size::px(36.))
+            .height(Size::px(36.))
+            .tooltip(t("oneclient.components.log_viewer.auto_scroll"))
+            .tooltip_placement(TooltipPlacement::Left)
+            .on_press(move |_| auto_scroll.toggle())
+            .child(Icon::new(IconType::ChevronDown).size(18.));
+
+        rect()
+            .position(Position::new_absolute().bottom(16.).right(22.))
+            // Above the ScrollArea thumbs (Layer 999) so it paints and takes pointer events on top
+            .layer(Layer::Relative(1000))
+            .child(if on {
+                button.primary()
+            } else {
+                button.secondary()
+            })
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -339,6 +395,13 @@ struct BodyArgs {
     sel_anchor: State<Option<(usize, usize)>>,
     sel_focus: State<Option<(usize, usize)>>,
     selecting: State<bool>,
+    numbers: Option<Arc<Vec<usize>>>,
+    on_jump: Option<EventHandler<()>>,
+    jump_to: State<Option<usize>>,
+    auto_scroll: State<bool>,
+    flash_line: State<Option<usize>>,
+    flash_anim: UseAnimation<AnimNum>,
+    flash: Option<(usize, f32)>,
 }
 
 fn scroll_body(args: BodyArgs) -> Element {
@@ -353,11 +416,40 @@ fn scroll_body(args: BodyArgs) -> Element {
         mut sel_anchor,
         mut sel_focus,
         mut selecting,
+        numbers,
+        on_jump,
+        mut jump_to,
+        mut auto_scroll,
+        mut flash_line,
+        mut flash_anim,
+        flash,
     } = args;
 
     let corrected_y = ctx.corrected_y;
     let corrected_x = ctx.corrected_x;
     let viewport_h = ctx.viewport_h;
+
+    if on_jump.is_some() {
+        jump_to.set_if_modified(None);
+    }
+    let pending = *jump_to.peek();
+    // Filtered rows keep their original numbers, so the last one exceeds the row count.
+    // Waiting for unfiltered rows stops a stale filtered list from consuming the jump.
+    let unfiltered = numbers.as_ref().is_none_or(|n| n.last() == Some(&count));
+    if on_jump.is_none()
+        && count > 0
+        && unfiltered
+        && let Some(target) = pending
+    {
+        jump_to.set(None);
+        if (1..=count).contains(&target) {
+            let index = target - 1;
+            let y = BODY_PAD_TOP + index as f32 * LINE_H - (viewport_h - LINE_H) / 2.;
+            scroll.scroll_to_y(corrected_scroll(content_h, viewport_h, -y) as i32);
+            flash_line.set(Some(index));
+            flash_anim.start();
+        }
+    }
     let viewport_top = ctx.viewport_top;
     let viewport_left = ctx.viewport_left;
     let body_w = content_w.max(ctx.viewport_w);
@@ -415,10 +507,35 @@ fn scroll_body(args: BodyArgs) -> Element {
         }
     };
 
-    let on_global_release = move |_: Event<PointerEventData>| {
-        if *selecting.read() {
-            selecting.set(false);
+    let jumpable = on_jump.is_some();
+    let numbers_click = numbers.clone();
+    let on_global_release = move |e: Event<PointerEventData>| {
+        if !*selecting.read() {
+            return;
         }
+        selecting.set(false);
+        let Some(on_jump) = &on_jump else {
+            return;
+        };
+        let (anchor, focus) = (*sel_anchor.peek(), *sel_focus.peek());
+        let Some((line, _)) = anchor.filter(|_| anchor == focus) else {
+            return;
+        };
+        let band_y = e.global_location().y as f32
+            - *geom.viewport_top.peek()
+            - geom.corrected_y
+            - BODY_PAD_TOP;
+        if line >= count || band_y < 0. || band_y >= count as f32 * LINE_H {
+            return;
+        }
+        let number = numbers_click
+            .as_ref()
+            .map_or(line + 1, |numbers| numbers[line]);
+        sel_anchor.set(None);
+        sel_focus.set(None);
+        auto_scroll.set_if_modified(false);
+        jump_to.set(Some(number));
+        on_jump.call(());
     };
 
     let lines_for_copy = lines.clone();
@@ -459,12 +576,17 @@ fn scroll_body(args: BodyArgs) -> Element {
     rect()
         .width(Size::px(body_w))
         .height(Size::px(content_h))
+        .cursor(jumpable.then_some(CursorIcon::Pointer))
         .on_pointer_down(on_body_down)
         .on_capture_global_pointer_move(on_global_move)
         .on_capture_global_pointer_up(on_global_release)
         .on_global_key_down(on_key_down)
         .child(log_body(
-            &lines[..],
+            Rows {
+                lines: &lines[..],
+                numbers: numbers.as_deref().map(|n| &n[..]),
+                flash,
+            },
             content_h,
             corrected_y,
             viewport_h,
@@ -475,8 +597,18 @@ fn scroll_body(args: BodyArgs) -> Element {
         .into_element()
 }
 
+struct Rows<'a> {
+    lines: &'a [Arc<str>],
+    numbers: Option<&'a [usize]>,
+    flash: Option<(usize, f32)>,
+}
+
 fn log_body(
-    lines: &[Arc<str>],
+    Rows {
+        lines,
+        numbers,
+        flash,
+    }: Rows,
     content_h: f32,
     corrected_y: f32,
     viewport_h: f32,
@@ -503,18 +635,23 @@ fn log_body(
             (c1 > c0).then_some((c0, c1))
         });
         let parsed = parse_line(raw);
-        body = body.child(log_line_row(i, &parsed, y, body_w, num_col_w, sel_cols));
+        let number = numbers.and_then(|n| n.get(i).copied()).unwrap_or(i + 1);
+        let glow = flash.and_then(|(line, value)| (line == i).then_some(value));
+        body = body.child(log_line_row(
+            number, &parsed, y, body_w, num_col_w, sel_cols, glow,
+        ));
     }
     body
 }
 
 fn log_line_row(
-    index: usize,
+    number: usize,
     parsed: &ParsedLine,
     y: f32,
     body_w: f32,
     num_col_w: f32,
     sel_cols: Option<(usize, usize)>,
+    glow: Option<f32>,
 ) -> impl IntoElement {
     let mut message = paragraph()
         .max_lines(1)
@@ -547,11 +684,15 @@ fn log_line_row(
         .height(Size::px(LINE_H))
         .cross_align(Alignment::Center)
         .spacing(NUM_GAP)
+        .corner_radius(rounded(4.))
+        .background(glow.map_or(Color::TRANSPARENT, |value| {
+            colors::with_alpha(colors::brand(), (value * FLASH_ALPHA) as u8)
+        }))
         .maybe_child(highlight)
         .child(
             rect().width(Size::px(num_col_w)).child(
                 label()
-                    .text(format!("{}", index + 1))
+                    .text(number.to_string())
                     .font_family(theme::mono_font())
                     .font_size(text_size(LINE_FONT_SIZE))
                     .text_align(TextAlign::Right)

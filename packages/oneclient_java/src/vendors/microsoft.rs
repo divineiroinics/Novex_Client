@@ -31,12 +31,13 @@ impl JavaRuntimeProvider for MicrosoftRuntimeProvider {
     }
 
     #[tracing::instrument(level = "debug", skip(self, net))]
-    async fn list_packages(
+    async fn list_arch_packages(
         &self,
         major: Option<u32>,
+        arch: HostArch,
         net: &RequestClient,
     ) -> JavaResult<Vec<JavaPackage>> {
-        let Some(arch) = MICROSOFT_ARCH else {
+        let Some(arch) = microsoft_arch(arch) else {
             tracing::debug!("Microsoft publishes no build for this architecture; listing nothing");
             return Ok(Vec::new());
         };
@@ -62,7 +63,7 @@ impl JavaRuntimeProvider for MicrosoftRuntimeProvider {
         .flatten()
         .collect();
 
-        packages.sort_by_key(|p| std::cmp::Reverse(p.java_version.first().copied().unwrap_or(0)));
+        super::sort_packages_by_major_desc(&mut packages);
         tracing::debug!(count = packages.len(), "listed Microsoft packages");
         Ok(packages)
     }
@@ -188,11 +189,13 @@ fn publishes_host_build(major: u32, arch: &str) -> bool {
 }
 
 /// Microsoft doesn't supply 32-bit
-const MICROSOFT_ARCH: Option<&str> = match HostTarget::CURRENT.arch {
-    HostArch::X86_64 => Some("x64"),
-    HostArch::Aarch64 => Some("aarch64"),
-    HostArch::X86 | HostArch::Arm => None,
-};
+const fn microsoft_arch(arch: HostArch) -> Option<&'static str> {
+    match arch {
+        HostArch::X86_64 => Some("x64"),
+        HostArch::Aarch64 => Some("aarch64"),
+        HostArch::X86 | HostArch::Arm => None,
+    }
+}
 
 /// Microsoft files musl builds under `alpine` where the other vendors say
 /// `linux-musl`

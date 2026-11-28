@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use freya::prelude::spawn_in_window;
+use freya::prelude::spawn_global;
 use freya::radio::RadioStation;
 use oneclient_events::{
     ChatEvent, Event, EventReceiver, GameEvent, LaunchStage, ProgressEvent, Signal,
@@ -15,9 +15,9 @@ use crate::chat::{ChatMessage, ChatToast};
 use crate::hooks::{Actions, PumpSignal};
 use crate::i18n::t;
 use crate::notifications::{MESSAGE_TOAST_TTL, PendingPromptView};
-use crate::state::{AppChannel, AppState, LoginProgress, StorageScanProgress};
+use crate::state::{AppChannel, AppState, GameState, LoginProgress, StorageScanProgress};
 
-/// Quiet period before log lines are written without it every line wakes the log view
+/// Maximum time to batch live log updates before notifying game subscribers
 const GAME_LOG_FLUSH: Duration = Duration::from_millis(120);
 
 const COALESCE_BUDGET: usize = 1024;
@@ -35,6 +35,7 @@ impl EventPump {
         // Hovering any toast pauses every toast including ones arriving while hovering
         let mut paused = false;
         let mut game_flush: Option<tokio::time::Instant> = None;
+        let mut pending_logs = Vec::new();
         let mut launched: HashSet<i64> = HashSet::new();
         let mut playing: Option<i64> = None;
 
@@ -81,8 +82,7 @@ impl EventPump {
 
                     if game_flush.is_some_and(|d| d <= now) {
                         game_flush = None;
-                        // Lines were already folded in on arrival this only ends the quiet period
-                        self.station.write_channel(AppChannel::Game);
+                        self.flush_game_logs(&mut pending_logs);
                     }
                 }
 
@@ -96,11 +96,13 @@ impl EventPump {
                         }
                     }
 
-                    let folded = self.apply(batch);
+                    let folded = self.apply(batch, &mut pending_logs);
                     if folded.touched_engine {
                         reconcile(&self.station, &mut armed, paused);
                     }
-                    if folded.saw_game_log && game_flush.is_none() {
+                    if pending_logs.is_empty() {
+                        game_flush = None;
+                    } else if game_flush.is_none() {
                         game_flush = Some(tokio::time::Instant::now() + GAME_LOG_FLUSH);
                     }
                     if folded.saw_stage {
@@ -117,11 +119,11 @@ impl EventPump {
                     match signal {
                         PumpSignal::Chat(job) => {
                             let station = self.station;
-                            spawn_in_window(job.run(station));
+                            spawn_global(job.run(station));
                         }
                         PumpSignal::JoinInvite(invite_id) => {
                             let actions = self.actions.clone();
-                            spawn_in_window(crate::hooks::start_invite_join(actions, invite_id));
+                            spawn_global(crate::hooks::start_invite_join(actions, invite_id));
                         }
                         PumpSignal::Reconcile => reconcile(&self.station, &mut armed, paused),
                         PumpSignal::PauseToasts => {
@@ -140,9 +142,18 @@ impl EventPump {
                 }
             }
         }
+
+        self.flush_game_logs(&mut pending_logs);
     }
 
-    fn apply(&mut self, batch: Vec<Event>) -> Folded {
+    fn flush_game_logs(&mut self, pending_logs: &mut Vec<(i64, String)>) {
+        if !pending_logs.is_empty() {
+            let mut guard = self.station.write_channel(AppChannel::Game);
+            append_game_logs(&mut guard.game, pending_logs.drain(..));
+        }
+    }
+
+    fn apply(&mut self, batch: Vec<Event>, pending_logs: &mut Vec<(i64, String)>) -> Folded {
         let mut folded = Folded::default();
         let mut engine_events = Vec::new();
         let mut stages: Vec<(i64, LaunchStage)> = Vec::new();
@@ -183,7 +194,6 @@ impl EventPump {
                     stages.push((cluster_id, stage));
                 }
                 Event::Game(GameEvent::Log { cluster_id, line }) => {
-                    folded.saw_game_log = true;
                     logs.push((cluster_id, line));
                 }
                 Event::Game(GameEvent::Failed {
@@ -222,34 +232,12 @@ impl EventPump {
             }
         }
 
-        if !stages.is_empty() || !logs.is_empty() || failed.is_some() || !crashed.is_empty() {
+        if stages.is_empty() && failed.is_none() && crashed.is_empty() {
+            pending_logs.extend(logs);
+        } else {
             let mut guard = self.station.write_channel(AppChannel::Game);
-            for (cluster_id, stage) in stages {
-                guard.game.stages.insert(cluster_id, stage);
-                if stage == LaunchStage::Checking {
-                    guard.game.error = None;
-                    guard.game.clear_crash(cluster_id);
-                    guard
-                        .game
-                        .logs
-                        .insert(cluster_id, std::sync::Arc::new(Vec::new()));
-                }
-            }
-            for (cluster_id, line) in logs {
-                let buffer = guard.game.logs.entry(cluster_id).or_default();
-                std::sync::Arc::make_mut(buffer).push(std::sync::Arc::from(line));
-            }
-            if let Some((cluster_id, message)) = failed {
-                guard.game.stages.insert(cluster_id, LaunchStage::Exited);
-                guard.game.error = Some(message);
-            }
-            for crash in crashed {
-                if guard.game.is_active(crash.cluster_id) {
-                    continue;
-                }
-                guard.game.push_crash(crash);
-                folded.crashed = true;
-            }
+            folded.crashed =
+                apply_game_status(&mut guard.game, pending_logs, stages, logs, failed, crashed);
         }
 
         let mut toasts: Vec<ChatToast> = Vec::new();
@@ -379,45 +367,132 @@ impl EventPump {
         }
 
         if folded.clusters {
-            spawn_in_window(async move { crate::hooks::invalidate_cluster_queries().await });
+            spawn_global(async move { crate::hooks::invalidate_cluster_queries().await });
         }
         if folded.java {
-            spawn_in_window(async move { crate::hooks::invalidate_java_queries().await });
+            spawn_global(async move { crate::hooks::invalidate_java_queries().await });
         }
         if folded.chat_roster {
             let station = self.station;
-            spawn_in_window(async move { crate::hooks::load_roster(station).await });
+            spawn_global(async move { crate::hooks::load_roster(station).await });
         }
         if folded.chat_invites {
             let station = self.station;
-            spawn_in_window(async move { crate::hooks::load_invite_games(station).await });
+            spawn_global(async move { crate::hooks::load_invite_games(station).await });
         }
         if folded.chat_unknown_group {
             let station = self.station;
-            spawn_in_window(async move { crate::hooks::load_conversations(station).await });
+            spawn_global(async move { crate::hooks::load_conversations(station).await });
         }
         if folded.chat_reconnected {
             let station = self.station;
-            spawn_in_window(async move { crate::hooks::resync_chat(station).await });
-            spawn_in_window(async move { crate::hooks::load_self_status(station).await });
+            spawn_global(async move { crate::hooks::resync_chat(station).await });
+            spawn_global(async move { crate::hooks::load_self_status(station).await });
         }
         for toast in toasts {
             let actions = self.actions.clone();
-            spawn_in_window(async move { crate::hooks::notify_chat(actions, toast).await });
+            spawn_global(async move { crate::hooks::notify_chat(actions, toast).await });
         }
         for group_id in std::mem::take(&mut folded.chat_read) {
             let station = self.station;
-            spawn_in_window(async move { crate::hooks::mark_chat_read(station, group_id).await });
+            spawn_global(async move { crate::hooks::mark_chat_read(station, group_id).await });
         }
 
         folded
     }
 }
 
+fn append_game_logs(game: &mut GameState, logs: impl IntoIterator<Item = (i64, String)>) {
+    for (cluster_id, line) in logs {
+        let buffer = game.logs.entry(cluster_id).or_default();
+        std::sync::Arc::make_mut(buffer).push(std::sync::Arc::from(line));
+    }
+}
+
+fn apply_game_status(
+    game: &mut GameState,
+    pending_logs: &mut Vec<(i64, String)>,
+    stages: Vec<(i64, LaunchStage)>,
+    logs: Vec<(i64, String)>,
+    failed: Option<(i64, String)>,
+    crashed: Vec<oneclient_events::GameCrash>,
+) -> bool {
+    // Logs from earlier batches must land before Checking resets the buffer.
+    append_game_logs(game, pending_logs.drain(..));
+    for (cluster_id, stage) in stages {
+        game.stages.insert(cluster_id, stage);
+        if stage == LaunchStage::Checking {
+            game.error = None;
+            game.clear_crash(cluster_id);
+            game.logs
+                .insert(cluster_id, std::sync::Arc::new(Vec::new()));
+        }
+    }
+    append_game_logs(game, logs);
+    if let Some((cluster_id, message)) = failed {
+        game.stages.insert(cluster_id, LaunchStage::Exited);
+        game.error = Some(message);
+    }
+    let mut show_crash = false;
+    for crash in crashed {
+        if game.is_active(crash.cluster_id) {
+            continue;
+        }
+        game.push_crash(crash);
+        show_crash = true;
+    }
+    show_crash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checking_discards_only_its_previous_session_logs() {
+        let mut game = GameState::default();
+        let mut pending = vec![(1, "old session".into()), (2, "other instance".into())];
+
+        apply_game_status(
+            &mut game,
+            &mut pending,
+            vec![(1, LaunchStage::Checking)],
+            vec![(1, "new session".into())],
+            None,
+            Vec::new(),
+        );
+
+        assert!(pending.is_empty());
+        assert_eq!(game.logs[&1][0].as_ref(), "new session");
+        assert_eq!(game.logs[&1].len(), 1);
+        assert_eq!(game.logs[&2][0].as_ref(), "other instance");
+    }
+
+    #[test]
+    fn failure_publishes_pending_and_current_logs_in_order() {
+        let mut game = GameState::default();
+        let mut pending = vec![(1, "first".into()), (1, "second".into())];
+
+        apply_game_status(
+            &mut game,
+            &mut pending,
+            Vec::new(),
+            vec![(1, "third".into())],
+            Some((1, "launch failed".into())),
+            Vec::new(),
+        );
+
+        assert!(pending.is_empty());
+        let lines: Vec<&str> = game.logs[&1].iter().map(AsRef::as_ref).collect();
+        assert_eq!(lines, ["first", "second", "third"]);
+        assert_eq!(game.stage(1), Some(LaunchStage::Exited));
+        assert_eq!(game.error.as_deref(), Some("launch failed"));
+    }
+}
+
 #[derive(Default)]
 struct Folded {
     touched_engine: bool,
-    saw_game_log: bool,
     saw_stage: bool,
     crashed: bool,
     launched: Vec<i64>,

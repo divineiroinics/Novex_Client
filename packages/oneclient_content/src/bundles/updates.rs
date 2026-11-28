@@ -58,6 +58,8 @@ impl Default for Prefetches {
 }
 
 pub const BUNDLE_APPLY_BUDGET: Duration = Duration::from_secs(60);
+/// Longer launch budget for an instance with no bundle files yet, so it doesn't start with an empty mods folder
+pub(crate) const FIRST_BUNDLE_INSTALL_BUDGET: Duration = Duration::from_secs(5 * 60);
 
 fn prefetch_key(file: &BundleFile) -> String {
     let sha1 = match &file.kind {
@@ -161,10 +163,7 @@ pub async fn cluster_has_bundle_content(cluster_id: i64, ctx: &ContentCtx) -> Co
         return Ok(false);
     }
 
-    if !bundle_dao::list_bundle_tracked(&ctx.db, cluster_id)
-        .await?
-        .is_empty()
-    {
+    if bundle_dao::has_bundle_tracked(&ctx.db, cluster_id).await? {
         return Ok(true);
     }
 
@@ -329,6 +328,8 @@ async fn check_bundle_updates_inner(
     let external_ids = external_ids_by_sha1(&archives);
     let mut updates_available = Vec::new();
     let mut removals_available = Vec::new();
+    let suppressors =
+        overrides_outside_declined(cluster_id, &archives, overrides.to_vec(), ctx).await?;
 
     for bundle_pkg in &bundle_packages {
         let Some(pkg_id) = &bundle_pkg.package_id else {
@@ -406,7 +407,8 @@ async fn check_bundle_updates_inner(
             let user_disabled = matches!(
                 overrides_map.get(&(bundle_name.clone(), pkg_id.clone())),
                 Some(OverrideType::Disabled | OverrideType::Removed)
-            );
+            ) || find_user_suppression(&suppressors, pkg_id)
+                == Some(OverrideType::Removed);
             let still_shipped = shipped_keys_by_bundle
                 .get(bundle_name)
                 .is_some_and(|keys| keys.contains(&installed_key));
@@ -436,9 +438,9 @@ async fn check_bundle_updates_inner(
     updates_available.retain(|u| {
         let file_id = u.new_file.kind.package_id();
         !matches!(
-            overrides_map.get(&(u.bundle_name.clone(), file_id)),
+            overrides_map.get(&(u.bundle_name.clone(), file_id.clone())),
             Some(OverrideType::Removed)
-        )
+        ) && find_user_suppression(&suppressors, &file_id) != Some(OverrideType::Removed)
     });
 
     let addition_eligible_bundles = addition_eligible_bundles(
@@ -491,7 +493,8 @@ async fn check_bundle_updates_inner(
             let file_id = file.kind.package_id();
             let user_override = overrides_map
                 .get(&(archive.manifest.name.clone(), file_id.clone()))
-                .copied();
+                .copied()
+                .or_else(|| find_user_suppression(&suppressors, &file_id));
 
             let file_key = file.kind.bundle_key();
             let exact_file_installed = matches!(
@@ -500,6 +503,10 @@ async fn check_bundle_updates_inner(
                     if planned_addition_keys.contains(&external_bundle_key(&ext.sha1))
             );
             if planned_addition_keys.contains(&file_key) || exact_file_installed {
+                continue;
+            }
+
+            if find_user_suppression(overrides, &file_id) == Some(OverrideType::Removed) {
                 continue;
             }
 
@@ -1057,13 +1064,14 @@ pub async fn get_bundles_with_update_status(
         &overrides_map,
     )
     .await?;
+    let accepted = accepted_bundles(cluster_id, ctx).await?;
     // Kept apart from `live_bundles` so awaiting a first install alone gives no opt-out ownership
     let awaiting_install = bundles_awaiting_first_install(
         &archives,
         &bundle_packages,
         &all_linked_by_hash,
         &overrides_map,
-        &accepted_bundles(cluster_id, ctx).await?,
+        &accepted,
         &live_bundles,
     );
 
@@ -1130,6 +1138,7 @@ pub async fn get_bundles_with_update_status(
 
         results.push(BundleWithUpdateStatus {
             opted_in_types,
+            taken: takes_bundle(&archive, &accepted),
             archive,
             files,
             has_updates,
@@ -1754,7 +1763,7 @@ mod tests {
             unreachable_file(),
             external_revision,
         ] {
-            let _ = shared_prefetch(&file, None, &ctx);
+            drop(shared_prefetch(&file, None, &ctx));
         }
 
         assert_eq!(ctx.prefetches.running.lock().unwrap().len(), 7);

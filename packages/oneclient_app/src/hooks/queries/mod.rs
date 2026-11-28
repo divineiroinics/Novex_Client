@@ -54,14 +54,16 @@ pub use auth::{
     use_default_account, use_finish_microsoft_login, use_refresh_account, use_refresh_all_accounts,
     use_remove_account, use_set_default_account,
 };
-pub use bisect::{BisectAction, BisectMutation, use_bisect, use_bisect_mutation};
+pub use bisect::{BisectAction, BisectMutation, bisect_report, use_bisect, use_bisect_mutation};
 pub use bundles::{
     AvailableBundlesQuery, ClusterBundles, OnboardingBundlesQuery, available_bundles,
     bundle_overrides_map, bundles_with_status_items, imported_modpacks_list, modpack_sources_map,
     onboarding_bundles_items, use_available_bundles, use_bundle_overrides, use_bundle_updates,
     use_bundles_with_status, use_imported_modpacks, use_modpack_sources, use_onboarding_bundles,
 };
-pub(crate) use bundles::{UNCREATED_CLUSTER, bundle_plan, bundle_taken, pkg_key};
+pub(crate) use bundles::{
+    UNCREATED_CLUSTER, bundle_plan, bundle_taken, pkg_key, shared_mod_keys, toggle_keys,
+};
 pub use changelog::{
     changelog_entries, changelog_error, changelog_is_loading, latest_changelog_version,
     use_changelog,
@@ -89,11 +91,11 @@ pub use logs::{
     use_log_action, use_log_content, use_upload_log,
 };
 pub use migration::{MigrationQuery, has_migration_data, migration_detection, use_migration};
-pub(crate) use mutations::take_bundles;
 pub use mutations::{
     ClusterAction, ClusterMutation, invalidate_cluster_content_queries, invalidate_cluster_queries,
     invalidate_profile_queries, use_cluster_mutation,
 };
+pub(crate) use mutations::{take_bundles, turn_on_bundles};
 pub use package_updates::{
     PackageUpdatesQuery, package_updates, stale_hashes, use_package_updates,
 };

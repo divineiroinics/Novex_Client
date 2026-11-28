@@ -60,7 +60,13 @@ pub fn java_arguments(
 
     let custom = split_custom_args(&custom_args);
 
-    parsed.extend(performance_flags(java_major, java_arch, mem_max, &custom));
+    parsed.extend(performance_flags(
+        java_major,
+        java_arch,
+        mem_max,
+        oneclient_common::total_ram_mb(),
+        &custom,
+    ));
 
     if java_major >= 21 {
         parsed.push("--add-modules=jdk.incubator.vector".to_string());
@@ -74,6 +80,8 @@ pub fn java_arguments(
 
 const ZGC_MIN_HEAP_MB: u32 = 8192;
 
+const ZGC_RAM_PER_HEAP: u32 = 3;
+
 const INITIAL_HEAP_MB: u32 = 512;
 
 #[must_use]
@@ -81,17 +89,22 @@ pub fn performance_flags(
     java_major: u32,
     java_arch: &str,
     mem_max: u32,
+    total_ram_mb: u32,
     custom_args: &[String],
 ) -> Vec<String> {
     let mut flags = vec![format!("-Xms{}M", mem_max.min(INITIAL_HEAP_MB))];
 
     let collector_chosen = custom_args.iter().any(|arg| is_collector_flag(arg));
 
-    let use_zgc =
-        !collector_chosen && java_major >= 21 && is_64_bit(java_arch) && mem_max >= ZGC_MIN_HEAP_MB;
+    let use_zgc = !collector_chosen
+        && java_major >= 21
+        && is_64_bit(java_arch)
+        && mem_max >= ZGC_MIN_HEAP_MB
+        && total_ram_mb / ZGC_RAM_PER_HEAP >= mem_max;
     let use_g1 = !collector_chosen && !use_zgc && java_major >= 8;
 
-    if (use_zgc || use_g1) && java_major == 24 {
+    let compact_headers = java_major >= 24 && is_64_bit(java_arch);
+    if compact_headers && java_major == 24 {
         flags.push("-XX:+UnlockExperimentalVMOptions".to_string());
     }
 
@@ -100,12 +113,22 @@ pub fn performance_flags(
         if java_major <= 22 {
             flags.push("-XX:+ZGenerational".to_string());
         }
+        let heap_chosen = custom_args.iter().any(|arg| {
+            arg.starts_with("-Xmx")
+                || arg.starts_with("-XX:MaxHeapSize=")
+                || arg.starts_with("-XX:SoftMaxHeapSize=")
+        });
+        if !heap_chosen {
+            flags.push(format!("-XX:SoftMaxHeapSize={}M", mem_max / 2));
+        }
     } else if use_g1 {
         flags.push("-XX:+UseG1GC".to_string());
         flags.push("-XX:+ParallelRefProcEnabled".to_string());
+        flags.push("-XX:MaxGCPauseMillis=50".to_string());
+        flags.push("-XX:+ExplicitGCInvokesConcurrent".to_string());
     }
 
-    if (use_zgc || use_g1) && java_major >= 24 && is_64_bit(java_arch) {
+    if compact_headers {
         flags.push("-XX:+UseCompactObjectHeaders".to_string());
     }
 
@@ -201,6 +224,14 @@ pub fn minecraft_arguments(
                 version_type,
                 resolution,
             )?);
+        }
+        if !parsed.iter().any(|arg| arg == "--width") {
+            parsed.extend([
+                "--width".to_owned(),
+                resolution.width.to_string(),
+                "--height".to_owned(),
+                resolution.height.to_string(),
+            ]);
         }
     }
 
@@ -673,7 +704,7 @@ mod tests {
     }
 
     fn flags(java_major: u32, java_arch: &str, mem_max: u32) -> Vec<String> {
-        performance_flags(java_major, java_arch, mem_max, &[])
+        performance_flags(java_major, java_arch, mem_max, 65536, &[])
     }
 
     fn custom(args: &str) -> Vec<String> {
@@ -735,10 +766,23 @@ mod tests {
         for mem in [ZGC_MIN_HEAP_MB, 12288, 16384] {
             let flags = flags(21, "amd64", mem);
             assert!(flags.contains(&"-XX:+UseZGC".to_string()));
+            assert!(flags.contains(&format!("-XX:SoftMaxHeapSize={}M", mem / 2)));
             assert!(
                 !flags.contains(&"-XX:+UseG1GC".to_string()),
                 "only one collector may be selected"
             );
+        }
+    }
+
+    #[test]
+    fn a_large_heap_without_spare_ram_gets_g1() {
+        for (mem, total) in [(8192, 16384), (8806, 17408), (12288, 32000)] {
+            let flags = performance_flags(25, "amd64", mem, total, &[]);
+            assert!(
+                !flags.iter().any(|f| f.contains("UseZGC")),
+                "{mem}M on {total}M"
+            );
+            assert!(flags.contains(&"-XX:+UseG1GC".to_string()));
         }
     }
 
@@ -752,6 +796,8 @@ mod tests {
                     "-Xms512M".to_string(),
                     "-XX:+UseG1GC".to_string(),
                     "-XX:+ParallelRefProcEnabled".to_string(),
+                    "-XX:MaxGCPauseMillis=50".to_string(),
+                    "-XX:+ExplicitGCInvokesConcurrent".to_string(),
                 ],
                 "{mem}M should get no hand-picked sizing"
             );
@@ -767,7 +813,7 @@ mod tests {
             "-XX:+UseShenandoahGC",
             "-XX:-UseG1GC",
         ] {
-            let flags = performance_flags(21, "amd64", 16384, &custom(arg));
+            let flags = performance_flags(21, "amd64", 16384, 65536, &custom(arg));
             assert!(
                 !flags.iter().any(|f| is_collector_flag(f)),
                 "{arg} should leave the collector entirely to the user"
@@ -785,8 +831,33 @@ mod tests {
     }
 
     #[test]
+    fn a_custom_heap_limit_drops_our_soft_max() {
+        for arg in ["-Xmx2048M", "-XX:MaxHeapSize=2g", "-XX:SoftMaxHeapSize=1g"] {
+            let flags = performance_flags(21, "amd64", 16384, 65536, &custom(arg));
+            assert!(flags.contains(&"-XX:+UseZGC".to_string()));
+            assert!(
+                !flags.iter().any(|f| f.starts_with("-XX:SoftMaxHeapSize")),
+                "{arg} should leave the soft limit to the user"
+            );
+        }
+    }
+
+    #[test]
+    fn a_custom_collector_keeps_compact_headers() {
+        for major in [24, 25] {
+            let flags = performance_flags(major, "amd64", 4096, 65536, &custom("-XX:+UseG1GC"));
+            assert!(!flags.contains(&"-XX:+UseG1GC".to_string()));
+            assert!(flags.contains(&"-XX:+UseCompactObjectHeaders".to_string()));
+            assert_eq!(
+                flags.contains(&"-XX:+UnlockExperimentalVMOptions".to_string()),
+                major == 24
+            );
+        }
+    }
+
+    #[test]
     fn unrelated_custom_arguments_leave_the_collector_alone() {
-        let flags = performance_flags(21, "amd64", 4096, &custom("-Dfoo=bar -Xss1M"));
+        let flags = performance_flags(21, "amd64", 4096, 65536, &custom("-Dfoo=bar -Xss1M"));
         assert!(flags.contains(&"-XX:+UseG1GC".to_string()));
     }
 
@@ -877,7 +948,12 @@ mod tests {
     fn a_modern_runtime_gets_the_full_set() {
         assert_eq!(
             flags(25, "aarch64", 16384),
-            vec!["-Xms512M", "-XX:+UseZGC", "-XX:+UseCompactObjectHeaders"]
+            vec![
+                "-Xms512M",
+                "-XX:+UseZGC",
+                "-XX:SoftMaxHeapSize=8192M",
+                "-XX:+UseCompactObjectHeaders"
+            ]
         );
     }
 
@@ -885,7 +961,13 @@ mod tests {
     fn a_tiny_profile_never_starts_above_its_ceiling() {
         assert_eq!(
             flags(21, "amd64", 256),
-            vec!["-Xms256M", "-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled",],
+            vec![
+                "-Xms256M",
+                "-XX:+UseG1GC",
+                "-XX:+ParallelRefProcEnabled",
+                "-XX:MaxGCPauseMillis=50",
+                "-XX:+ExplicitGCInvokesConcurrent",
+            ],
             "a start size above the maximum is refused by the JVM outright"
         );
     }
@@ -1138,6 +1220,32 @@ mod tests {
         assert_eq!(args.first().unwrap(), "--username");
         assert_eq!(args[1], "player");
         assert_eq!(args.last().unwrap(), "--fabric");
+    }
+
+    #[test]
+    fn a_legacy_version_gets_the_profile_resolution() {
+        let dir = std::env::temp_dir();
+
+        let args = minecraft_arguments(
+            None,
+            Some("--username ${auth_player_name}"),
+            "token",
+            "player",
+            uuid::Uuid::nil(),
+            "1.8.9",
+            "1.8",
+            &dir,
+            &dir,
+            interfrost::api::minecraft::VersionType::Release,
+            Resolution::new(1280, 720),
+            "arm64",
+        )
+        .unwrap();
+
+        assert_eq!(
+            args,
+            ["--username", "player", "--width", "1280", "--height", "720"]
+        );
     }
 
     #[test]

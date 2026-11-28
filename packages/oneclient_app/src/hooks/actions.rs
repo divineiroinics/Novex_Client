@@ -1,6 +1,6 @@
 //! Core operations go onto freya's UI-thread executor radio state is `!Send`
 //!
-//! Always `spawn_in_window` never `spawn` Freya's `spawn` cancels the task when
+//! Always `spawn_global` never `spawn` Freya's `spawn` cancels the task when
 //! the calling component unmounts this work is app-scoped not component-scoped
 
 mod cloud_sync;
@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use freya::prelude::spawn_in_window;
+use freya::prelude::spawn_global;
 use freya::query::QueriesStorage;
 use freya::radio::RadioStation;
 use oneclient_cluster::profiles::list_named_profiles;
@@ -37,7 +37,7 @@ use oneclient_content::packages::{LiveSync, LocalImportReport};
 use oneclient_core::BUNDLE_APPLY_BUDGET;
 use oneclient_core::relocate::RelocationPlan;
 use oneclient_core::settings::LauncherSettings;
-use oneclient_core::settings::store::{save_global_profile, save_settings_and_apply};
+use oneclient_core::settings::store::{save_current_settings_and_apply, save_global_profile};
 use oneclient_db::models::ClusterId;
 use oneclient_events::{Answer, Level};
 use tokio::sync::mpsc;
@@ -56,6 +56,8 @@ use crate::state::{
     MissingModInstall, RelocationState,
 };
 use crate::{invalidate_java_queries, launcher};
+
+pub static COPIES_REQUEST: Mutex<Option<(i64, Vec<String>)>> = Mutex::new(None);
 
 /// Over-disabling is the cheaper mistake a dead button beats a second game
 const LAUNCH_HOLD: Duration = Duration::from_secs(2);
@@ -142,6 +144,13 @@ pub enum PumpSignal {
     JoinInvite(i32),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PackageCheck {
+    pub hash: String,
+    pub name: String,
+    pub modpack: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct Actions {
     station: RadioStation<AppState, AppChannel>,
@@ -216,7 +225,7 @@ impl Actions {
 
     pub fn reload_settings(&self) {
         let station = self.station;
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             {
                 let mut guard = station.clone().write_channel(AppChannel::Settings);
@@ -239,7 +248,7 @@ impl Actions {
 
     pub fn save_settings(&self) {
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             {
                 let mut guard = actions.station.clone().write_channel(AppChannel::Settings);
@@ -247,8 +256,7 @@ impl Actions {
                 guard.settings.error = None;
             }
 
-            let settings = state.settings.read().clone();
-            let result = save_settings_and_apply(&state.services, &settings).await;
+            let result = save_current_settings_and_apply(&state.services, &state.settings).await;
 
             let mut guard = actions.station.clone().write_channel(AppChannel::Settings);
             guard.settings.error = result.err().map(|err| err.to_string());
@@ -274,11 +282,13 @@ impl Actions {
         Some(updated)
     }
 
-    fn persist(&self, settings: LauncherSettings) {
+    fn persist(&self) {
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
-            if let Err(err) = save_settings_and_apply(&state.services, &settings).await {
+            if let Err(err) =
+                save_current_settings_and_apply(&state.services, &state.settings).await
+            {
                 actions.set_settings_error(Some(err.to_string()));
             }
         });
@@ -295,21 +305,28 @@ impl Actions {
         if let Ok(state) = launcher::state() {
             state.discord.set_enabled(updated.discord_enabled);
         }
-        self.persist(updated);
+        self.persist();
     }
 
-    pub fn set_settings(&self, settings: LauncherSettings) {
-        let Some(updated) = self.mutate_settings(|s| {
-            let pending = std::mem::take(&mut s.pending_release_migrations);
-            *s = settings;
-            s.pending_release_migrations = pending;
-        }) else {
+    /// Applies the net config before resyncing so the sync fetches the new channel
+    pub fn set_nightly_bundles(&self, enabled: bool) {
+        if self
+            .mutate_settings(|s| s.nightly_bundles = enabled)
+            .is_none()
+        {
             return;
-        };
-        if let Ok(state) = launcher::state() {
-            state.discord.set_enabled(updated.discord_enabled);
         }
-        self.persist(updated);
+        let actions = self.clone();
+        spawn_global(async move {
+            let Ok(state) = launcher::state() else { return };
+            if let Err(err) =
+                save_current_settings_and_apply(&state.services, &state.settings).await
+            {
+                actions.set_settings_error(Some(err.to_string()));
+                return;
+            }
+            actions.sync_bundles();
+        });
     }
 
     /// Not persisted the next real save carries the seen versions along
@@ -332,8 +349,8 @@ impl Actions {
             }
         });
 
-        if let (true, Some(updated)) = (changed, updated) {
-            self.persist(updated);
+        if changed && updated.is_some() {
+            self.persist();
         }
     }
 
@@ -351,48 +368,59 @@ impl Actions {
             }
         });
 
-        if let (true, Some(updated)) = (changed, updated) {
-            self.persist(updated);
+        if changed && updated.is_some() {
+            self.persist();
         }
     }
 
     pub fn mark_onboarding_seen(&self) {
-        if let Some(updated) = self.mutate_settings(|settings| settings.seen_onboarding = true) {
-            self.persist(updated);
+        if self
+            .mutate_settings(|settings| settings.seen_onboarding = true)
+            .is_some()
+        {
+            self.persist();
         }
     }
 
     pub fn skip_microsoft_java(&self) {
-        if let Some(updated) = self.mutate_settings(|settings| settings.skip_microsoft_java = true)
+        if self
+            .mutate_settings(|settings| settings.skip_microsoft_java = true)
+            .is_some()
         {
-            self.persist(updated);
+            self.persist();
         }
     }
 
     pub fn reset_onboarding(&self) {
-        if let Some(updated) = self.mutate_settings(|settings| {
-            settings.seen_onboarding = false;
-            settings.accepted_tos_version = 0;
-            settings.accepted_privacy_version = 0;
-            settings.seen_versions.clear();
-        }) {
-            self.persist(updated);
+        if self
+            .mutate_settings(|settings| {
+                settings.seen_onboarding = false;
+                settings.accepted_tos_version = 0;
+                settings.accepted_privacy_version = 0;
+                settings.seen_versions.clear();
+            })
+            .is_some()
+        {
+            self.persist();
         }
     }
 
     pub fn accept_tos(&self, terms_version: u32, privacy_version: u32) {
         let mut was_declined = false;
 
-        let Some(updated) = self.mutate_settings(|settings| {
-            was_declined = settings.declined_tos;
-            settings.accepted_tos_version = terms_version;
-            settings.accepted_privacy_version = privacy_version;
-            settings.declined_tos = false;
-        }) else {
+        if self
+            .mutate_settings(|settings| {
+                was_declined = settings.declined_tos;
+                settings.accepted_tos_version = terms_version;
+                settings.accepted_privacy_version = privacy_version;
+                settings.declined_tos = false;
+            })
+            .is_none()
+        {
             return;
-        };
+        }
 
-        self.persist(updated);
+        self.persist();
 
         if was_declined {
             self.notify(t("oneclient.actions.tos_accepted.title"))
@@ -411,18 +439,21 @@ impl Actions {
             guard.social_popped_notice = false;
         }
 
-        if let Some(updated) = self.mutate_settings(|settings| {
-            settings.declined_tos = true;
-            settings.accepted_tos_version = 0;
-            settings.accepted_privacy_version = 0;
-        }) {
-            self.persist(updated);
+        if self
+            .mutate_settings(|settings| {
+                settings.declined_tos = true;
+                settings.accepted_tos_version = 0;
+                settings.accepted_privacy_version = 0;
+            })
+            .is_some()
+        {
+            self.persist();
         }
     }
 
     pub fn save_global_profile(&self, profile: GameSettingsProfile) {
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             if let Err(err) = save_global_profile(&state.settings, profile).await {
                 tracing::error!("failed to save the global profile: {err:#}");
@@ -435,7 +466,7 @@ impl Actions {
 
     pub fn update_global_profile(&self, update: ProfileUpdate) {
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let mut global = state.settings.read().global_game_settings.clone();
             update.apply(&mut global);
@@ -450,7 +481,7 @@ impl Actions {
 
     pub fn create_settings_profile(&self, name: impl Into<String>) {
         let name = name.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let global = state.settings.read().global_game_settings.clone();
             match oneclient_cluster::profiles::create_settings_profile(
@@ -473,7 +504,7 @@ impl Actions {
         force_fullscreen: Option<bool>,
     ) {
         let name = name.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let global = state.settings.read().global_game_settings.clone();
             match oneclient_cluster::profiles::create_profile_from_global(
@@ -492,7 +523,7 @@ impl Actions {
     }
 
     pub fn upsert_named_profile(&self, profile: GameSettingsProfile) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             match oneclient_cluster::profiles::upsert_named_profile(&state.services.db, &profile)
                 .await
@@ -505,7 +536,7 @@ impl Actions {
 
     pub fn update_named_profile(&self, name: impl Into<String>, update: ProfileUpdate) {
         let name = name.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             match oneclient_cluster::profiles::update_named_profile(
                 &state.services.db,
@@ -522,7 +553,7 @@ impl Actions {
 
     pub fn delete_named_profile(&self, name: impl Into<String>) {
         let name = name.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             match oneclient_cluster::profiles::delete_named_profile(&state.services.db, &name).await
             {
@@ -533,7 +564,7 @@ impl Actions {
     }
 
     pub fn update_cluster_profile(&self, cluster_id: ClusterId, update: ProfileUpdate) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             match state.clusters.update_profile(cluster_id, update).await {
                 Ok(_) => super::invalidate_profile_queries().await,
@@ -543,7 +574,7 @@ impl Actions {
     }
 
     pub fn set_graphics_backend(&self, game_dir: PathBuf, backend: GraphicsBackend) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             match oneclient_core::game::write_graphics_backend(&game_dir, backend).await {
                 Ok(()) => QueriesStorage::<GraphicsBackendQuery>::invalidate_all().await,
@@ -559,7 +590,7 @@ impl Actions {
     }
 
     pub fn save_game_options(&self, game_dir: PathBuf, edits: HashMap<String, String>) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             match oneclient_core::game::write_options(&state, &game_dir, &edits).await {
                 Ok(()) => QueriesStorage::<GraphicsBackendQuery>::invalidate_all().await,
@@ -575,7 +606,7 @@ impl Actions {
     }
 
     pub fn export_game_options(&self, game_dir: PathBuf, edits: HashMap<String, String>) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let Some(file) = rfd::AsyncFileDialog::new()
                 .set_title(t("oneclient.clusters.export.save_file_ellipsis"))
@@ -606,7 +637,7 @@ impl Actions {
         profile_name: impl Into<String>,
     ) {
         let profile_name = profile_name.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let global = state.settings.read().global_game_settings.clone();
             match state
@@ -622,7 +653,7 @@ impl Actions {
 
     pub fn set_cluster_loader_version(&self, cluster_id: ClusterId, version: impl Into<String>) {
         let version = version.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             if let Err(err) = state
                 .clusters
@@ -648,7 +679,7 @@ impl Actions {
         target: oneclient_core::ImportTarget,
     ) {
         let folder_name = folder_name.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let events = state.services.events.clone();
             match off_ui({
@@ -680,7 +711,7 @@ impl Actions {
     }
 
     pub fn install_java_runtime(&self, vendor: oneclient_java::JavaVendor, major: u32) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let events = state.services.events.clone();
             match off_ui({
@@ -703,7 +734,7 @@ impl Actions {
     }
 
     pub fn add_custom_java_runtime(&self, path: PathBuf) {
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let events = state.services.events.clone();
             match state.java.add_custom_runtime(path).await {
@@ -728,7 +759,7 @@ impl Actions {
 
     pub fn remove_java_runtime(&self, path: impl Into<String>) {
         let path = path.into();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let events = state.services.events.clone();
 
@@ -920,7 +951,7 @@ impl Actions {
             return;
         }
 
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             let content = state.services.content();
 
@@ -952,7 +983,7 @@ impl Actions {
         self.with_engine(|state| state.notifications.hide_optional_mods());
         let actions = self.clone();
 
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else {
                 actions.close_optional_mods(OptionalModsOutcome::Launch);
                 return;
@@ -1195,7 +1226,7 @@ impl Actions {
 
         let station = self.station;
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let started = Instant::now();
             match cluster_busy_elsewhere(cluster_id).await {
                 Some((title, body)) => actions.notify(title).body(body).send(),
@@ -1250,7 +1281,7 @@ impl Actions {
 
         let station = self.station;
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             match cluster_busy_elsewhere(cluster_id).await {
                 Some((title, body)) => actions.notify(title).body(body).send(),
                 None => {
@@ -1282,7 +1313,7 @@ impl Actions {
         });
     }
 
-    pub fn check_package_updates(&self, cluster_id: ClusterId, packages: Vec<(String, String)>) {
+    pub fn check_package_updates(&self, cluster_id: ClusterId, packages: Vec<PackageCheck>) {
         if packages.is_empty() {
             return;
         }
@@ -1292,7 +1323,7 @@ impl Actions {
 
         let station = self.station;
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             match cluster_busy_elsewhere(cluster_id).await {
                 Some((title, body)) => actions.notify(title).body(body).send(),
                 None => actions.run_package_check(cluster_id, packages).await,
@@ -1307,9 +1338,12 @@ impl Actions {
         });
     }
 
-    async fn run_package_check(&self, cluster_id: ClusterId, packages: Vec<(String, String)>) {
+    async fn run_package_check(&self, cluster_id: ClusterId, packages: Vec<PackageCheck>) {
         let Ok(state) = launcher::state() else { return };
-        let hashes: Vec<String> = packages.iter().map(|(hash, _)| hash.clone()).collect();
+        let hashes: Vec<String> = packages
+            .iter()
+            .map(|package| package.hash.clone())
+            .collect();
         let content = state.services.content();
         let check = off_ui(async move {
             oneclient_core::refresh_browser_package_updates_for(cluster_id, &hashes, &content).await
@@ -1329,14 +1363,45 @@ impl Actions {
             }
         };
 
+        let managed = check.managed.len();
+        if managed > 0 {
+            let managed_package = match check.managed.as_slice() {
+                [hash] => packages.iter().find(|package| &package.hash == hash),
+                _ => None,
+            };
+            let body = match managed_package {
+                Some(package) => match &package.modpack {
+                    Some(pack) => tf(
+                        "oneclient.actions.package_check.managed.body.one",
+                        &[&package.name, pack],
+                    ),
+                    None => tf(
+                        "oneclient.actions.package_check.managed.body.bundle",
+                        &[&package.name],
+                    ),
+                },
+                None => tf(
+                    "oneclient.actions.package_check.managed.body.other",
+                    &[&managed],
+                ),
+            };
+            self.notify(t("oneclient.actions.package_check.managed.title"))
+                .body(body)
+                .send();
+        }
+
         let unchecked = check.unchecked.len();
         if unchecked > 0 {
-            let body = match packages.as_slice() {
-                [(_, name)] => tf(
+            let unchecked_package = match check.unchecked.as_slice() {
+                [hash] => packages.iter().find(|package| &package.hash == hash),
+                _ => None,
+            };
+            let body = match unchecked_package {
+                Some(package) => tf(
                     "oneclient.actions.package_check.unchecked.body.one",
-                    &[name],
+                    &[&package.name],
                 ),
-                _ => tf(
+                None => tf(
                     "oneclient.actions.package_check.unchecked.body.other",
                     &[&unchecked],
                 ),
@@ -1345,18 +1410,16 @@ impl Actions {
                 .body(body)
                 .send();
         }
-        if unchecked == packages.len() {
+        let checked = packages.len().saturating_sub(unchecked + managed);
+        if checked == 0 {
             return;
         }
 
         let updates = check.updates;
         if updates.is_empty() {
             let body = match packages.as_slice() {
-                [(_, name)] => tf("oneclient.actions.package_check.none.one", &[name]),
-                _ => tf(
-                    "oneclient.actions.package_check.none.other",
-                    &[&(packages.len() - unchecked)],
-                ),
+                [package] => tf("oneclient.actions.package_check.none.one", &[&package.name]),
+                _ => tf("oneclient.actions.package_check.none.other", &[&checked]),
             };
             self.notify(t("oneclient.actions.update_check.none.title"))
                 .body(body)
@@ -1411,7 +1474,7 @@ impl Actions {
 
     pub fn repair_cluster(&self, cluster_id: ClusterId) {
         self.dismiss_game_crash(cluster_id);
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             oneclient_core::game::repair_cluster(&state, cluster_id).await;
         });
@@ -1440,7 +1503,7 @@ impl Actions {
         }
 
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else {
                 actions
                     .station
@@ -1530,7 +1593,8 @@ impl Actions {
         }
 
         let write = ClusterWrite::take(cluster_id);
-        spawn_in_window(async move {
+        let router = freya::router::RouterContext::try_get();
+        spawn_global(async move {
             let _write = write;
             let Ok(state) = launcher::state() else { return };
             let events = state.services.events.clone();
@@ -1568,7 +1632,42 @@ impl Actions {
                         &report,
                         deferred && state.games.is_active(cluster_id),
                     );
+                    let imported: Vec<String> =
+                        report.imported.iter().map(|row| row.hash.clone()).collect();
+                    let duplicates = off_ui({
+                        let state = state.clone();
+                        async move {
+                            oneclient_core::game::shadowed_bundle_mods(&state, cluster_id).await
+                        }
+                    })
+                    .await;
+                    let copied = imported.iter().any(|hash| {
+                        duplicates.copies.contains_key(hash)
+                            || duplicates
+                                .copies
+                                .values()
+                                .flatten()
+                                .any(|copy| copy == hash)
+                    });
+                    // Set before the refetch so the mods list sees it when the new copies arrive
+                    if copied {
+                        *COPIES_REQUEST.lock().unwrap() = Some((cluster_id, imported));
+                    }
                     super::invalidate_cluster_queries().await;
+                    if copied {
+                        let mods = crate::routes::Route::ClusterMods { cluster_id };
+                        // `current()` reads a component context this global task doesn't
+                        // have, so parse the plain route string instead
+                        if let Some(router) = &router
+                            && router
+                                .full_route_string()
+                                .parse::<crate::routes::Route>()
+                                .ok()
+                                != Some(mods.clone())
+                        {
+                            let _ = router.push(mods);
+                        }
+                    }
                 }
                 Err(err) => events
                     .notify(t("oneclient.actions.import_failed"))
@@ -1663,7 +1762,7 @@ impl Actions {
             .installs
             .begin(cluster_id, provider, project_id.clone());
 
-        spawn_in_window(async move {
+        spawn_global(async move {
             let finish = |actions: &Actions| {
                 actions
                     .station
@@ -1832,7 +1931,7 @@ impl Actions {
             .installs
             .begin(cluster_id, provider, project_id.clone());
 
-        spawn_in_window(async move {
+        spawn_global(async move {
             let finish = |actions: &Actions| {
                 actions
                     .station
@@ -1884,7 +1983,7 @@ impl Actions {
         }
         let bundle_name = bundle_name.into();
         let write = ClusterWrite::take(cluster_id);
-        spawn_in_window(async move {
+        spawn_global(async move {
             let _write = write;
             let Ok(state) = launcher::state() else { return };
             let events = state.services.events.clone();
@@ -1926,7 +2025,7 @@ impl Actions {
         }
         let actions = self.clone();
         let write = ClusterWrite::take(cluster_id);
-        spawn_in_window(async move {
+        spawn_global(async move {
             let _write = write;
             let Ok(state) = launcher::state() else { return };
             let result = match off_ui({
@@ -2009,7 +2108,7 @@ impl Actions {
         });
 
         let mut station = self.station;
-        spawn_in_window(async move {
+        spawn_global(async move {
             let (progress, mut seen) = tokio::sync::watch::channel((0, 0));
             let mut copy = std::pin::pin!(off_ui(async move {
                 oneclient_core::relocate::relocate(&state, &plan, |copied, total| {
@@ -2072,7 +2171,7 @@ impl Actions {
             }
         };
 
-        spawn_in_window(async move {
+        spawn_global(async move {
             let signed_out = off_ui(async move { state.auth.check_expired_sessions().await }).await;
             if signed_out {
                 super::invalidate_auth_queries(None).await;
@@ -2096,7 +2195,7 @@ impl Actions {
             .launcher
             .syncing_bundles = true;
 
-        spawn_in_window(async move {
+        spawn_global(async move {
             off_ui(async move {
                 if let Err(err) = state.bundles.sync(&state.services.content()).await {
                     tracing::error!("bundle catalog sync failed: {err:#}");
@@ -2636,7 +2735,7 @@ impl Actions {
         }
         let actions = self.clone();
         let write = ClusterWrite::take(update.cluster_id);
-        spawn_in_window(async move {
+        spawn_global(async move {
             let _write = write;
             let Ok(state) = launcher::state() else { return };
 
@@ -2714,7 +2813,7 @@ impl Actions {
     pub fn skip_package_update(&self, cluster_id: ClusterId, hash: impl Into<String>) {
         let hash = hash.into();
         let actions = self.clone();
-        spawn_in_window(async move {
+        spawn_global(async move {
             let Ok(state) = launcher::state() else { return };
             if let Err(err) = oneclient_core::skip_browser_package_update(
                 cluster_id,
